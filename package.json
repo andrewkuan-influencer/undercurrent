@@ -1,0 +1,27 @@
+{
+  "name": "undercurrent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.17",
+    "@tanstack/react-start": "1.168.27",
+    "effect": "3.21.4",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@tanstack/nitro-v2-vite-plugin": "1.155.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.0.3",
+    "typescript": "5.9.3",
+    "vite": "8.1.4"
+  }
+}

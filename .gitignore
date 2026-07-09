@@ -1,0 +1,27 @@
+# dependencies
+node_modules
+
+# build output
+dist
+.output
+.nitro
+.vinxi
+.tanstack
+
+# vercel
+.vercel
+
+# generated route tree
+src/routeTree.gen.ts
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
