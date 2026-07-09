@@ -7,5 +7,5 @@
  *
  * If OpenRouter rejects a slug, changing it here is the only edit needed.
  */
-export const MAIN_MODEL = 'anthropic/claude-sonnet-4.5'
+export const MAIN_MODEL = 'anthropic/claude-sonnet-4.6'
 export const LIGHTWEIGHT_MODEL = 'anthropic/claude-haiku-4.5'
