@@ -1,0 +1,180 @@
+import {
+  boolean,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  vector,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core'
+import { EMBEDDING_DIMENSION } from '../config/embedding'
+
+/**
+ * The evidence-ledger schema (PRD 6, appendix DDL 13). The `sources` table is
+ * the ledger; `result_citations` may only reference rows that exist in it, so
+ * the citation guarantee is structural, enforced by the foreign key here.
+ *
+ * Every vector column uses the single EMBEDDING_DIMENSION constant so the
+ * dimension can change in one place before launch.
+ */
+
+// projects. Top-level container: audiences, topics, and the work done inside.
+export const projects = pgTable('projects', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description'),
+  audiences: text('audiences').array(),
+  topics: text('topics').array(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// questions. First-class record with its own embedding, recency window, status,
+// and an optional parent for dive-deeper threads.
+export const questions = pgTable(
+  'questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    parentQuestionId: uuid('parent_question_id').references(
+      (): AnyPgColumn => questions.id,
+    ),
+    question: text('question').notNull(),
+    questionEmbedding: vector('question_embedding', {
+      dimensions: EMBEDDING_DIMENSION,
+    }),
+    status: text('status').notNull().default('run_once'),
+    recencyWindowDays: integer('recency_window_days'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('questions_question_embedding_hnsw').using(
+      'hnsw',
+      t.questionEmbedding.op('vector_cosine_ops'),
+    ),
+  ],
+)
+
+// sources. The evidence ledger. One row per retrieved item, deduplicated by the
+// UNIQUE source_key, with verification fields and an embedding.
+export const sources = pgTable(
+  'sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceKey: text('source_key').notNull().unique(),
+    channel: text('channel').notNull(), // reddit | web | doc
+    voice: text('voice'), // consumer | expert
+    url: text('url'),
+    title: text('title'),
+    excerpt: text('excerpt'),
+    language: text('language'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    verifiedLive: boolean('verified_live').notNull().default(false),
+    lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    seenCount: integer('seen_count').notNull().default(1),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSION }),
+  },
+  (t) => [
+    index('sources_embedding_hnsw').using(
+      'hnsw',
+      t.embedding.op('vector_cosine_ops'),
+    ),
+  ],
+)
+
+// question_sources. Join recording which sources a question pulled, with a
+// relevance score.
+export const questionSources = pgTable('question_sources', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  questionId: uuid('question_id')
+    .notNull()
+    .references(() => questions.id),
+  sourceId: uuid('source_id')
+    .notNull()
+    .references(() => sources.id),
+  relevance: doublePrecision('relevance'),
+  firstLinkedAt: timestamp('first_linked_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+// results. A produced report. The insight object is held as JSONB (PRD 6.3).
+export const results = pgTable('results', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  questionId: uuid('question_id')
+    .notNull()
+    .references(() => questions.id),
+  insight: jsonb('insight').notNull(),
+  iterationCount: integer('iteration_count'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+// result_citations. Each citation in a report, pointing at a real source and
+// freezing a snapshot of it. The source_id FK is the citation guarantee.
+export const resultCitations = pgTable('result_citations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  resultId: uuid('result_id')
+    .notNull()
+    .references(() => results.id),
+  sourceId: uuid('source_id')
+    .notNull()
+    .references(() => sources.id),
+  blockType: text('block_type'),
+  snapshotUrl: text('snapshot_url'),
+  snapshotTitle: text('snapshot_title'),
+  snapshotExcerpt: text('snapshot_excerpt'),
+})
+
+// uploaded_files. Documents uploaded to a project.
+export const uploadedFiles = pgTable('uploaded_files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => projects.id),
+  fileName: text('file_name').notNull(),
+  contentHash: text('content_hash'),
+  status: text('status'),
+})
+
+// document_chunks. Uploaded files split into embedded chunks for retrieval.
+export const documentChunks = pgTable(
+  'document_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => uploadedFiles.id),
+    chunkIndex: integer('chunk_index').notNull(),
+    chunkText: text('chunk_text').notNull(),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSION }),
+  },
+  (t) => [
+    index('document_chunks_embedding_hnsw').using(
+      'hnsw',
+      t.embedding.op('vector_cosine_ops'),
+    ),
+  ],
+)
+
+// retrieval_memory. A log of every tool call and whether it was effective, so
+// the engine learns which queries pay off.
+export const retrievalMemory = pgTable('retrieval_memory', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  questionId: uuid('question_id')
+    .notNull()
+    .references(() => questions.id),
+  toolName: text('tool_name').notNull(),
+  queryUsed: text('query_used'),
+  usefulResultsCount: integer('useful_results_count'),
+  wasEffective: boolean('was_effective'),
+})
