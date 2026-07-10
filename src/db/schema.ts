@@ -80,6 +80,10 @@ export const sources = pgTable(
     lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     seenCount: integer('seen_count').notNull().default(1),
+    // Set when an external source carries no publish date: it is kept in scope
+    // but flagged rather than dropped by the recency filter (PRD 5.4). Extends
+    // the appendix DDL (13); flag for the PRD to record.
+    undated: boolean('undated').notNull().default(false),
     embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSION }),
   },
   (t) => [

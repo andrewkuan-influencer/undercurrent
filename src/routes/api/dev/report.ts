@@ -61,9 +61,14 @@ export const Route = createFileRoute('/api/dev/report')({
         const projectId = await resolveProjectId(
           url.searchParams.get('projectId'),
         )
+        const recencyParam = Number(url.searchParams.get('recencyDays'))
+        const recencyDays =
+          Number.isFinite(recencyParam) && recencyParam > 0
+            ? recencyParam
+            : undefined
 
         const exit = await Effect.runPromiseExit(
-          runReportOnce(questionText, projectId).pipe(
+          runReportOnce(questionText, projectId, recencyDays).pipe(
             Effect.provide(RetrievalLive),
           ),
         )
@@ -79,7 +84,7 @@ export const Route = createFileRoute('/api/dev/report')({
           return json(body, statusForError(tag))
         }
 
-        const resultId = exit.value
+        const { resultId, gather } = exit.value
 
         // Render by resolving the stored result and its frozen citation
         // snapshots (PRD 5.1).
@@ -102,6 +107,7 @@ export const Route = createFileRoute('/api/dev/report')({
           resultId,
           question: questionText,
           projectId,
+          gather,
           insight: result?.insight ?? null,
           citations: cites,
         }
