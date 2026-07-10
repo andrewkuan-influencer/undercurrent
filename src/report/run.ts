@@ -30,8 +30,8 @@ export const QuestionStatus = {
 
 const SNAPSHOT_EXCERPT_LIMIT = 2000
 
-/** The embedding model is deferred (PRD 12), so there is no query embedder yet. */
-const HAS_EMBEDDER = false
+/** A query embedder now exists (PRD 7b), so the document channel is active. */
+const HAS_EMBEDDER = true
 
 const dbOp = <A>(thunk: () => Promise<A>): Effect.Effect<A, DbError> =>
   Effect.tryPromise({
@@ -197,6 +197,7 @@ export const runForQuestion = (
     const { stats } = yield* runGather(
       questionId,
       question.question,
+      question.projectId,
       projectContext,
       recency,
       HAS_EMBEDDER,

@@ -2,10 +2,11 @@ import { sql } from 'drizzle-orm'
 import { Effect, Either } from 'effect'
 import { db } from '../db/client'
 import { questionSources, retrievalMemory, sources } from '../db/schema'
+import { embedQuery, type EmbeddingError } from '../embedding/embed'
 import { sourceKeyFor } from '../ledger/sourceKey'
 import { DbError } from '../report/errors'
 import { Retrieval } from '../retrieval'
-import type { Channel, RetrievedItem } from '../retrieval'
+import type { Channel, RetrievalError, RetrievedItem } from '../retrieval'
 import {
   MAX_ROUNDS,
   MAX_SOURCES,
@@ -73,6 +74,7 @@ const dbOp = <A>(thunk: () => Promise<A>): Effect.Effect<A, DbError> =>
 export const runGather = (
   questionId: string,
   questionText: string,
+  projectId: string,
   project: ProjectContext,
   recencyWindowDays: number,
   hasEmbedder: boolean,
@@ -112,15 +114,26 @@ export const runGather = (
     const runQuery = (
       pq: PlannedQuery,
     ): Effect.Effect<{ pq: PlannedQuery; items: RetrievedItem[] }> => {
-      const search =
-        pq.channel === 'web'
-          ? retrieval.searchWeb(pq.query, { maxResults: RESULTS_PER_QUERY, timeRange })
-          : pq.channel === 'reddit'
-            ? retrieval.searchReddit(pq.query, {
-                maxResults: RESULTS_PER_QUERY,
-                timeRange,
-              })
-            : Effect.succeed([] as ReadonlyArray<RetrievedItem>)
+      let search: Effect.Effect<
+        ReadonlyArray<RetrievedItem>,
+        RetrievalError | EmbeddingError
+      >
+      if (pq.channel === 'web') {
+        search = retrieval.searchWeb(pq.query, { maxResults: RESULTS_PER_QUERY, timeRange })
+      } else if (pq.channel === 'reddit') {
+        search = retrieval.searchReddit(pq.query, { maxResults: RESULTS_PER_QUERY, timeRange })
+      } else {
+        // Documents: embed the query, then pgvector search. Fails soft (the
+        // embedder needing OPENAI_API_KEY, or no chunks) via Effect.either below.
+        search = embedQuery(pq.query).pipe(
+          Effect.flatMap((queryEmbedding) =>
+            retrieval.searchDocuments(pq.query, projectId, {
+              queryEmbedding,
+              limit: RESULTS_PER_QUERY,
+            }),
+          ),
+        )
+      }
       return Effect.either(search).pipe(
         Effect.map((e) => ({
           pq,

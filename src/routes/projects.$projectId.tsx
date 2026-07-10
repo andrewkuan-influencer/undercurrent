@@ -30,6 +30,11 @@ function ProjectPage() {
   const [question, setQuestion] = useState('')
   const [recencyIdx, setRecencyIdx] = useState(DEFAULT_RECENCY_INDEX)
   const [asking, setAsking] = useState(false)
+  const [documents, setDocuments] = useState<
+    Array<{ id: string; fileName: string; status: string | null }>
+  >([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const load = () =>
     fetch(`/api/projects/${projectId}`)
@@ -37,10 +42,41 @@ function ProjectPage() {
       .then(setData)
       .catch(() => setData(null))
 
+  const loadDocuments = () =>
+    fetch(`/api/projects/${projectId}/documents`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setDocuments)
+      .catch(() => setDocuments([]))
+
   useEffect(() => {
     void load()
+    void loadDocuments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  const uploadDocument = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    const input = form.elements.namedItem('file') as HTMLInputElement | null
+    const file = input?.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const body = new FormData()
+    body.append('file', file)
+    const res = await fetch(`/api/projects/${projectId}/documents`, {
+      method: 'POST',
+      body,
+    })
+    setUploading(false)
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string }
+      setUploadError(err.error ?? 'upload failed')
+      return
+    }
+    form.reset()
+    void loadDocuments()
+  }
 
   const ask = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,6 +127,43 @@ function ProjectPage() {
           ))}
         </div>
       ) : null}
+
+      <h2>Documents</h2>
+      {documents.length === 0 ? (
+        <p className="muted">
+          No documents yet. Uploaded documents are searched first in every run.
+        </p>
+      ) : (
+        <ul className="clean">
+          {documents.map((d) => (
+            <li key={d.id} className="card">
+              {d.fileName}
+              <span className="pill">{d.status ?? 'unknown'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={uploadDocument} className="stack prose">
+        <div>
+          <label htmlFor="file">Upload a document (text or markdown)</label>
+          <input
+            id="file"
+            name="file"
+            type="file"
+            accept=".txt,.md,.markdown,.csv,.json,text/*"
+          />
+        </div>
+        <div>
+          <button type="submit" disabled={uploading}>
+            {uploading ? 'Uploading and embedding…' : 'Upload'}
+          </button>
+          {uploadError ? (
+            <span className="muted" style={{ marginLeft: '0.6rem' }}>
+              {uploadError}
+            </span>
+          ) : null}
+        </div>
+      </form>
 
       <h2>Ask a question</h2>
       <form onSubmit={ask} className="stack prose">
