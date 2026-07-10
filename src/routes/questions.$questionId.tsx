@@ -1,37 +1,12 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { ReportBody } from '../ui/ReportBody'
+import type { InsightView, RenderedSourceView } from '../ui/insightView'
 
 export const Route = createFileRoute('/questions/$questionId')({
   component: QuestionPage,
 })
 
-interface Headline {
-  reframe: string
-  obvious: string
-  unexpected: string
-  interesting: string
-  citations: string[]
-}
-interface InsightView {
-  headline: Headline
-  topicBreakdown: Array<{ topic: string; summary: string; citations: string[] }>
-  tensions: Array<{ tension: string; citations: string[] }>
-  consumerVoice: Array<{
-    observation: string
-    verbatim: string
-    citations: string[]
-  }>
-  creatorAngles: Array<{ angle: string; rationale: string; citations: string[] }>
-}
-interface RenderedSource {
-  id: string
-  url: string | null
-  title: string | null
-  excerpt: string | null
-  channel: string
-  voice: string | null
-  verifiedLive: boolean
-}
 interface QuestionData {
   id: string
   projectId: string
@@ -42,7 +17,8 @@ interface QuestionData {
   result: {
     resultId: string
     insight: InsightView
-    sources: RenderedSource[]
+    sources: RenderedSourceView[]
+    shareToken: string | null
   } | null
 }
 
@@ -103,14 +79,20 @@ function QuestionPage() {
           try a broader question or a wider recency window.
         </p>
       ) : data.result ? (
-        <Report
-          insight={data.result.insight}
-          sources={data.result.sources}
-          questionId={questionId}
-          onDive={(id) =>
-            navigate({ to: '/questions/$questionId', params: { questionId: id } })
-          }
-        />
+        <div>
+          <ShareBar shareToken={data.result.shareToken} />
+          <ReportBody
+            insight={data.result.insight}
+            sources={data.result.sources}
+          />
+          <h2>Dive deeper</h2>
+          <DiveBox
+            questionId={questionId}
+            onDive={(id) =>
+              navigate({ to: '/questions/$questionId', params: { questionId: id } })
+            }
+          />
+        </div>
       ) : (
         <p className="muted">No report available.</p>
       )}
@@ -133,127 +115,31 @@ function RunStatus({ status }: { status: string }) {
   )
 }
 
-function Report({
-  insight,
-  sources,
-  questionId,
-  onDive,
-}: {
-  insight: InsightView
-  sources: RenderedSource[]
-  questionId: string
-  onDive: (id: string) => void
-}) {
-  // Map cited source ids to their position in the sources list for inline refs.
-  const indexById = new Map<string, number>()
-  sources.forEach((s, i) => indexById.set(s.id, i + 1))
-
-  const Cites = ({ ids }: { ids: string[] }) => {
-    const refs = ids.map((id) => indexById.get(id)).filter((n): n is number => !!n)
-    if (refs.length === 0) return null
-    return (
-      <sup>
-        {refs.map((n, i) => (
-          <span key={n}>
-            {i > 0 ? ' ' : ' '}
-            <a href={`#source-${n}`}>[{n}]</a>
-          </span>
-        ))}
-      </sup>
-    )
-  }
+function ShareBar({ shareToken }: { shareToken: string | null }) {
+  const [copied, setCopied] = useState(false)
+  if (!shareToken) return null
+  const shareUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/share/${shareToken}`
+      : `/share/${shareToken}`
 
   return (
-    <div className="prose">
-      <h2>Headline reframe</h2>
-      <p style={{ fontSize: '1.25rem', lineHeight: 1.4 }}>
-        {insight.headline.reframe}
-        <Cites ids={insight.headline.citations} />
-      </p>
-      <div className="stack">
-        <div>
-          <strong>Obvious.</strong> {insight.headline.obvious}
-        </div>
-        <div>
-          <strong>Unexpected.</strong> {insight.headline.unexpected}
-        </div>
-        <div>
-          <strong>Interesting.</strong> {insight.headline.interesting}
-        </div>
-      </div>
-
-      <h2>Topic breakdown</h2>
-      <ul className="clean stack">
-        {insight.topicBreakdown.map((t, i) => (
-          <li key={i}>
-            <strong>{t.topic}.</strong> {t.summary}
-            <Cites ids={t.citations} />
-          </li>
-        ))}
-      </ul>
-
-      <h2>Tensions</h2>
-      <ul className="clean stack">
-        {insight.tensions.map((t, i) => (
-          <li key={i}>
-            {t.tension}
-            <Cites ids={t.citations} />
-          </li>
-        ))}
-      </ul>
-
-      <h2>Consumer voice</h2>
-      <ul className="clean stack">
-        {insight.consumerVoice.map((c, i) => (
-          <li key={i}>
-            <div>
-              {c.observation}
-              <Cites ids={c.citations} />
-            </div>
-            {c.verbatim ? <blockquote>{c.verbatim}</blockquote> : null}
-          </li>
-        ))}
-      </ul>
-
-      <h2>Suggested creator angles</h2>
-      <ul className="clean stack">
-        {insight.creatorAngles.map((a, i) => (
-          <li key={i}>
-            <strong>{a.angle}.</strong> {a.rationale}
-            <Cites ids={a.citations} />
-          </li>
-        ))}
-      </ul>
-
-      <h2>Verified sources</h2>
-      <ol className="clean stack">
-        {sources.map((s, i) => (
-          <li key={s.id} id={`source-${i + 1}`} className="card">
-            <div>
-              <span className="muted">[{i + 1}]</span>{' '}
-              {s.url ? (
-                <a href={s.url} target="_blank" rel="noopener noreferrer">
-                  {s.title ?? s.url}
-                </a>
-              ) : (
-                <span>{s.title ?? 'Untitled source'}</span>
-              )}
-              <span className="pill">{s.channel}</span>
-              {s.voice ? <span className="pill">{s.voice}</span> : null}
-              {s.verifiedLive ? <span className="pill">verified</span> : null}
-            </div>
-            {s.excerpt ? (
-              <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.9rem' }}>
-                {s.excerpt.slice(0, 280)}
-                {s.excerpt.length > 280 ? '…' : ''}
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-
-      <h2>Dive deeper</h2>
-      <DiveBox questionId={questionId} onDive={onDive} />
+    <div className="card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        className="secondary"
+        onClick={() => {
+          void navigator.clipboard.writeText(shareUrl).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          })
+        }}
+      >
+        {copied ? 'Copied' : 'Copy shareable link'}
+      </button>
+      <a className="secondary" style={{ padding: '0.5rem 0.9rem', border: '1px solid rgba(0,0,0,0.35)', borderRadius: 6, textDecoration: 'none' }} href={`/api/share/${shareToken}/pdf`}>
+        Download PDF
+      </a>
     </div>
   )
 }

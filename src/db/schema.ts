@@ -116,6 +116,8 @@ export const questionSources = pgTable('question_sources', {
 })
 
 // results. A produced report. The insight object is held as JSONB (PRD 6.3).
+// share_token gives a report a public, unguessable shareable-link URL (PRD 4.6);
+// nullable so pre-existing results are simply not shareable.
 export const results = pgTable('results', {
   id: uuid('id').primaryKey().defaultRandom(),
   questionId: uuid('question_id')
@@ -123,6 +125,7 @@ export const results = pgTable('results', {
     .references(() => questions.id),
   insight: jsonb('insight').notNull(),
   iterationCount: integer('iteration_count'),
+  shareToken: text('share_token').unique(),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

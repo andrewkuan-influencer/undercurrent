@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { desc, eq } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { db } from '../db/client'
@@ -221,11 +222,12 @@ export const runForQuestion = (
     const { insight, citations } = yield* synthesize(question.question, forSynthesis)
 
     const snapshotById = new Map(workingSet.map((s) => [s.id, s]))
+    const shareToken = randomUUID()
     yield* dbOp(() =>
       db.transaction(async (tx) => {
         const [result] = await tx
           .insert(results)
-          .values({ questionId, insight, iterationCount: stats.rounds })
+          .values({ questionId, insight, iterationCount: stats.rounds, shareToken })
           .returning({ id: results.id })
         if (!result) throw new Error('result insert returned no row')
         for (const citation of citations) {
@@ -270,29 +272,13 @@ export interface RenderedResult {
   readonly resultId: string
   readonly insight: unknown
   readonly sources: RenderedSource[]
+  readonly shareToken: string | null
 }
 
-/**
- * Render a completed result: the stored insight plus the verified sources list,
- * built from the frozen citation snapshots (PRD 5.1, 4.3). Returns null if the
- * question has no result yet.
- */
-export const loadRenderedResult = (
-  questionId: string,
-): Effect.Effect<RenderedResult | null, DbError> =>
-  Effect.gen(function* () {
-    const resultRows = yield* dbOp(() =>
-      db
-        .select({ id: results.id, insight: results.insight })
-        .from(results)
-        .where(eq(results.questionId, questionId))
-        .orderBy(desc(results.createdAt))
-        .limit(1),
-    )
-    const result = resultRows[0]
-    if (!result) return null
-
-    const cites = yield* dbOp(() =>
+/** The verified sources list for a result, built from frozen citation snapshots. */
+const citedSources = (resultId: string): Effect.Effect<RenderedSource[], DbError> =>
+  Effect.map(
+    dbOp(() =>
       db
         .select({
           sourceId: resultCitations.sourceId,
@@ -305,26 +291,90 @@ export const loadRenderedResult = (
         })
         .from(resultCitations)
         .innerJoin(sources, eq(sources.id, resultCitations.sourceId))
-        .where(eq(resultCitations.resultId, result.id)),
+        .where(eq(resultCitations.resultId, resultId)),
+    ),
+    (cites) => {
+      const byId = new Map<string, RenderedSource>()
+      for (const c of cites) {
+        if (byId.has(c.sourceId)) continue
+        byId.set(c.sourceId, {
+          id: c.sourceId,
+          url: c.snapshotUrl,
+          title: c.snapshotTitle,
+          excerpt: c.snapshotExcerpt,
+          channel: c.channel,
+          voice: c.voice,
+          verifiedLive: c.verifiedLive,
+        })
+      }
+      return [...byId.values()]
+    },
+  )
+
+/**
+ * Render a completed result: the stored insight plus the verified sources list,
+ * built from the frozen citation snapshots (PRD 5.1, 4.3). Returns null if the
+ * question has no result yet.
+ */
+export const loadRenderedResult = (
+  questionId: string,
+): Effect.Effect<RenderedResult | null, DbError> =>
+  Effect.gen(function* () {
+    const resultRows = yield* dbOp(() =>
+      db
+        .select({
+          id: results.id,
+          insight: results.insight,
+          shareToken: results.shareToken,
+        })
+        .from(results)
+        .where(eq(results.questionId, questionId))
+        .orderBy(desc(results.createdAt))
+        .limit(1),
     )
-
-    const byId = new Map<string, RenderedSource>()
-    for (const c of cites) {
-      if (byId.has(c.sourceId)) continue
-      byId.set(c.sourceId, {
-        id: c.sourceId,
-        url: c.snapshotUrl,
-        title: c.snapshotTitle,
-        excerpt: c.snapshotExcerpt,
-        channel: c.channel,
-        voice: c.voice,
-        verifiedLive: c.verifiedLive,
-      })
-    }
-
+    const result = resultRows[0]
+    if (!result) return null
     return {
       resultId: result.id,
       insight: result.insight,
-      sources: [...byId.values()],
+      shareToken: result.shareToken,
+      sources: yield* citedSources(result.id),
+    }
+  })
+
+export interface SharedResult {
+  readonly resultId: string
+  readonly question: string
+  readonly insight: unknown
+  readonly sources: RenderedSource[]
+}
+
+/**
+ * Render a result by its public share token (PRD 4.6). Powers the read-only
+ * shared link and the PDF export. Returns null for an unknown token.
+ */
+export const loadSharedResult = (
+  token: string,
+): Effect.Effect<SharedResult | null, DbError> =>
+  Effect.gen(function* () {
+    const rows = yield* dbOp(() =>
+      db
+        .select({
+          id: results.id,
+          insight: results.insight,
+          question: questions.question,
+        })
+        .from(results)
+        .innerJoin(questions, eq(questions.id, results.questionId))
+        .where(eq(results.shareToken, token))
+        .limit(1),
+    )
+    const result = rows[0]
+    if (!result) return null
+    return {
+      resultId: result.id,
+      question: result.question,
+      insight: result.insight,
+      sources: yield* citedSources(result.id),
     }
   })
