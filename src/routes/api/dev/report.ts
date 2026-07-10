@@ -1,13 +1,14 @@
-// Dev-only: load .env into process.env before anything that reads it (db client,
-// model/config keys). Must be the first import.
-import 'dotenv/config'
 import { createFileRoute } from '@tanstack/react-router'
 import { eq } from 'drizzle-orm'
-import { Cause, Effect, Exit, Option } from 'effect'
+import { Effect, Exit } from 'effect'
 import { db } from '../../../db/client'
-import { projects, resultCitations, results } from '../../../db/schema'
+import { projects } from '../../../db/schema'
 import { RetrievalLive } from '../../../retrieval'
-import { runReportOnce } from '../../../report/runReportOnce'
+import {
+  createQuestion,
+  loadRenderedResult,
+  runForQuestion,
+} from '../../../report/run'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
@@ -32,19 +33,11 @@ async function resolveProjectId(provided: string | null): Promise<string> {
   return created[0]!.id
 }
 
-const statusForError = (tag: string): number => {
-  switch (tag) {
-    case 'NoEvidenceError':
-      return 404
-    case 'UnknownCitationError':
-    case 'InvalidModelOutputError':
-    case 'ModelError':
-      return 502
-    default:
-      return 500
-  }
-}
-
+/**
+ * Dev-only synchronous run: create a question, run it to completion, and print
+ * the rendered result. The product UI uses the same run functions but
+ * fire-and-forget with status polling.
+ */
 export const Route = createFileRoute('/api/dev/report')({
   server: {
     handlers: {
@@ -58,61 +51,36 @@ export const Route = createFileRoute('/api/dev/report')({
         if (!questionText) {
           return json({ error: 'missing ?q=<question text>' }, 400)
         }
-        const projectId = await resolveProjectId(
-          url.searchParams.get('projectId'),
-        )
+        const projectId = await resolveProjectId(url.searchParams.get('projectId'))
         const recencyParam = Number(url.searchParams.get('recencyDays'))
-        const recencyDays =
-          Number.isFinite(recencyParam) && recencyParam > 0
-            ? recencyParam
-            : undefined
+        const recencyWindowDays =
+          Number.isFinite(recencyParam) && recencyParam > 0 ? recencyParam : undefined
 
         const exit = await Effect.runPromiseExit(
-          runReportOnce(questionText, projectId, recencyDays).pipe(
-            Effect.provide(RetrievalLive),
+          createQuestion({ projectId, question: questionText, recencyWindowDays }).pipe(
+            Effect.flatMap((questionId) =>
+              runForQuestion(questionId).pipe(
+                Effect.provide(RetrievalLive),
+                Effect.flatMap(() => loadRenderedResult(questionId)),
+                Effect.map((rendered) => ({ questionId, rendered })),
+              ),
+            ),
           ),
         )
 
         if (Exit.isFailure(exit)) {
-          const failure = Option.getOrNull(Cause.failureOption(exit.cause))
-          const tag =
-            failure && typeof failure === 'object' && '_tag' in failure
-              ? String((failure as { _tag: unknown })._tag)
-              : 'UnknownError'
-          const body = { error: tag, detail: Cause.pretty(exit.cause) }
-          console.error('[dev/report] run failed:', body)
-          return json(body, statusForError(tag))
+          console.error('[dev/report] run failed')
+          return json({ error: 'run failed' }, 500)
         }
 
-        const { resultId, gather } = exit.value
-
-        // Render by resolving the stored result and its frozen citation
-        // snapshots (PRD 5.1).
-        const [result] = await db
-          .select({ insight: results.insight })
-          .from(results)
-          .where(eq(results.id, resultId))
-        const cites = await db
-          .select({
-            sourceId: resultCitations.sourceId,
-            blockType: resultCitations.blockType,
-            snapshotUrl: resultCitations.snapshotUrl,
-            snapshotTitle: resultCitations.snapshotTitle,
-            snapshotExcerpt: resultCitations.snapshotExcerpt,
-          })
-          .from(resultCitations)
-          .where(eq(resultCitations.resultId, resultId))
-
-        const rendered = {
-          resultId,
+        const body = {
+          questionId: exit.value.questionId,
           question: questionText,
           projectId,
-          gather,
-          insight: result?.insight ?? null,
-          citations: cites,
+          result: exit.value.rendered,
         }
-        console.log('[dev/report] rendered:\n', JSON.stringify(rendered, null, 2))
-        return json(rendered)
+        console.log('[dev/report] rendered:\n', JSON.stringify(body, null, 2))
+        return json(body)
       },
     },
   },

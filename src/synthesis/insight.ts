@@ -1,19 +1,72 @@
 import { Schema } from 'effect'
 
 /**
- * The shape the main model must return. `results.insight` stores this whole
- * object as JSONB (PRD 6.3). Every block carries the source ids it cites; those
- * ids are validated against the working set before anything is written.
+ * The insight report, composed of the six components in PRD 4.3. `results.insight`
+ * stores this whole object as JSONB. Every component carries the source ids it
+ * cites; those ids are validated against the working set before any write, and
+ * the sources list itself is rendered from the frozen citation snapshots.
+ *
+ * Citation arrays default to empty so a partial model response still decodes;
+ * the citation rule is enforced separately on whatever ids are present.
  */
-export const CitationBlock = Schema.Struct({
-  type: Schema.String,
-  text: Schema.String,
-  citations: Schema.Array(Schema.String),
+const citations = Schema.optionalWith(Schema.Array(Schema.String), {
+  default: () => [],
 })
-export type CitationBlock = Schema.Schema.Type<typeof CitationBlock>
+
+/** Component 1: the headline reframe, through the obvious/unexpected/interesting lens. */
+export const Headline = Schema.Struct({
+  reframe: Schema.String,
+  obvious: Schema.String,
+  unexpected: Schema.String,
+  interesting: Schema.String,
+  citations,
+})
+
+/** Component 2: topic breakdown. */
+export const TopicBreakdownItem = Schema.Struct({
+  topic: Schema.String,
+  summary: Schema.String,
+  citations,
+})
+
+/** Component 3: tensions, framed to provoke rather than conclude. */
+export const Tension = Schema.Struct({
+  tension: Schema.String,
+  citations,
+})
+
+/** Component 4: consumer voice, real consumer language with a verbatim quote. */
+export const ConsumerVoiceItem = Schema.Struct({
+  observation: Schema.String,
+  verbatim: Schema.String,
+  citations,
+})
+
+/** Component 5: suggested creator angles (angles proposed, not named creators). */
+export const CreatorAngle = Schema.Struct({
+  angle: Schema.String,
+  rationale: Schema.String,
+  citations,
+})
+
+const emptyArray = <A, I>(item: Schema.Schema<A, I>) =>
+  Schema.optionalWith(Schema.Array(item), { default: () => [] })
 
 export const Insight = Schema.Struct({
-  summary: Schema.String,
-  blocks: Schema.Array(CitationBlock),
+  headline: Headline,
+  topicBreakdown: emptyArray(TopicBreakdownItem),
+  tensions: emptyArray(Tension),
+  consumerVoice: emptyArray(ConsumerVoiceItem),
+  creatorAngles: emptyArray(CreatorAngle),
 })
 export type Insight = Schema.Schema.Type<typeof Insight>
+
+/** The six citing component groups, used to bind and freeze citations. */
+export const CITATION_GROUPS = [
+  'headline',
+  'topic',
+  'tension',
+  'consumer_voice',
+  'creator_angle',
+] as const
+export type CitationGroup = (typeof CITATION_GROUPS)[number]

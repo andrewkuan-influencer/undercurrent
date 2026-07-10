@@ -2,7 +2,7 @@ import { Effect, Schema } from 'effect'
 import { MAIN_MODEL } from '../config/models'
 import { callModel, type ModelError } from '../models/openrouter'
 import { InvalidModelOutputError, UnknownCitationError } from './errors'
-import { Insight } from './insight'
+import { Insight, type CitationGroup } from './insight'
 import { loadSynthesisPrompt } from './prompt'
 
 /** A source as presented to the model and used to validate its citations. */
@@ -94,21 +94,42 @@ export const synthesize = (
       ),
     )
 
+    // Collect every citation across the six components, tagged by which
+    // component made it, then enforce THE rule: each id must be in the working
+    // set. An unknown id fails hard; nothing is written.
+    const groups: Array<[CitationGroup, ReadonlyArray<string>]> = [
+      ['headline', insight.headline.citations],
+      ...insight.topicBreakdown.map(
+        (t) => ['topic', t.citations] as [CitationGroup, ReadonlyArray<string>],
+      ),
+      ...insight.tensions.map(
+        (t) => ['tension', t.citations] as [CitationGroup, ReadonlyArray<string>],
+      ),
+      ...insight.consumerVoice.map(
+        (c) =>
+          ['consumer_voice', c.citations] as [CitationGroup, ReadonlyArray<string>],
+      ),
+      ...insight.creatorAngles.map(
+        (a) =>
+          ['creator_angle', a.citations] as [CitationGroup, ReadonlyArray<string>],
+      ),
+    ]
+
     const known = new Set(workingSet.map((s) => s.id))
     const citations: BoundCitation[] = []
     const seen = new Set<string>()
-    for (const block of insight.blocks) {
-      for (const id of block.citations) {
+    for (const [group, ids] of groups) {
+      for (const id of ids) {
         if (!known.has(id)) {
           return yield* new UnknownCitationError({
             citationId: id,
             knownIds: [...known],
           })
         }
-        const dedupeKey = `${block.type}::${id}`
+        const dedupeKey = `${group}::${id}`
         if (!seen.has(dedupeKey)) {
           seen.add(dedupeKey)
-          citations.push({ sourceId: id, blockType: block.type })
+          citations.push({ sourceId: id, blockType: group })
         }
       }
     }

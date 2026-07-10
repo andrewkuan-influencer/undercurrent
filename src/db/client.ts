@@ -1,3 +1,6 @@
+// Load .env into process.env before reading DATABASE_URL, so any server module
+// that imports the db (routes, scripts) has the connection string available.
+import 'dotenv/config'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
