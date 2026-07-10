@@ -4,10 +4,31 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  redirect,
+  useRouteContext,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { signOut } from '../auth/client'
+import { fetchSession, type SessionUser } from '../auth/session'
+
+/** Routes reachable without a session: sign-in and the public shared report. */
+const PUBLIC_PREFIXES = ['/signin', '/share']
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  )
+}
 
 export const Route = createRootRoute({
+  // Gate every route behind auth except the public prefixes (PRD 8).
+  beforeLoad: async ({ location }) => {
+    const session = await fetchSession()
+    if (!session && !isPublicPath(location.pathname)) {
+      throw redirect({ to: '/signin' })
+    }
+    return { user: session?.user ?? null }
+  },
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -85,10 +106,34 @@ const GLOBAL_CSS = `
 `
 
 function RootComponent() {
+  const { user } = useRouteContext({ from: Route.id }) as {
+    user: SessionUser | null
+  }
   return (
     <RootDocument>
-      <header className="site-header">
+      <header
+        className="site-header"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+      >
         <Link to="/">Undercurrent</Link>
+        {user ? (
+          <span style={{ fontSize: '0.85rem' }} className="muted">
+            {user.email}
+            {user.role ? <span className="pill">{user.role}</span> : null}{' '}
+            <button
+              type="button"
+              className="secondary"
+              style={{ marginLeft: '0.5rem', padding: '0.25rem 0.6rem' }}
+              onClick={() => {
+                void signOut().then(() => {
+                  window.location.href = '/signin'
+                })
+              }}
+            >
+              Sign out
+            </button>
+          </span>
+        ) : null}
       </header>
       <div className="container">
         <Outlet />

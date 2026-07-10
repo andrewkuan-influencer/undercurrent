@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Effect } from 'effect'
 import { createQuestion } from '../../report/run'
+import { requireUser } from '../../auth/guard'
 import { json } from '../../server/http'
 import { startRun } from '../../server/runBackground'
 
@@ -8,6 +9,7 @@ export const Route = createFileRoute('/api/questions')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
         const body = (await request.json().catch(() => null)) as {
           projectId?: unknown
           question?: unknown

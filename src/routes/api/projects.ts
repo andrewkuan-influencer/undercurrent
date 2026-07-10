@@ -2,12 +2,14 @@ import { createFileRoute } from '@tanstack/react-router'
 import { desc } from 'drizzle-orm'
 import { db } from '../../db/client'
 import { projects } from '../../db/schema'
+import { requireUser } from '../../auth/guard'
 import { json, normalizeList } from '../../server/http'
 
 export const Route = createFileRoute('/api/projects')({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
         const rows = await db
           .select({
             id: projects.id,
@@ -22,6 +24,7 @@ export const Route = createFileRoute('/api/projects')({
         return json(rows)
       },
       POST: async ({ request }) => {
+        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
         const body = (await request.json().catch(() => null)) as {
           name?: unknown
           description?: unknown

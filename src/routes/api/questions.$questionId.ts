@@ -4,12 +4,14 @@ import { Effect } from 'effect'
 import { db } from '../../db/client'
 import { questions } from '../../db/schema'
 import { QuestionStatus, loadRenderedResult } from '../../report/run'
+import { requireUser } from '../../auth/guard'
 import { json } from '../../server/http'
 
 export const Route = createFileRoute('/api/questions/$questionId')({
   server: {
     handlers: {
-      GET: async ({ params }) => {
+      GET: async ({ params, request }) => {
+        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
         const rows = await db
           .select({
             id: questions.id,

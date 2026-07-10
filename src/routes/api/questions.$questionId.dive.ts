@@ -4,6 +4,7 @@ import { Effect } from 'effect'
 import { db } from '../../db/client'
 import { questions } from '../../db/schema'
 import { createQuestion } from '../../report/run'
+import { requireUser } from '../../auth/guard'
 import { json } from '../../server/http'
 import { startRun } from '../../server/runBackground'
 
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/api/questions/$questionId/dive')({
   server: {
     handlers: {
       POST: async ({ params, request }) => {
+        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
         const body = (await request.json().catch(() => null)) as {
           question?: unknown
           recencyWindowDays?: unknown
