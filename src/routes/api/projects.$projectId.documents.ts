@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { desc, eq } from 'drizzle-orm'
 import { Effect } from 'effect'
-import { requireUser } from '../../auth/guard'
+import { ownsProject, requireUser } from '../../auth/guard'
 import { db } from '../../db/client'
 import { uploadedFiles } from '../../db/schema'
 import { ingestDocument } from '../../uploads/ingest'
@@ -22,7 +22,11 @@ export const Route = createFileRoute('/api/projects/$projectId/documents')({
     handlers: {
       // List a project's uploaded documents.
       GET: async ({ params, request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        if (!(await ownsProject(user.id, params.projectId))) {
+          return json({ error: 'project not found' }, 404)
+        }
         const rows = await db
           .select({
             id: uploadedFiles.id,
@@ -36,7 +40,11 @@ export const Route = createFileRoute('/api/projects/$projectId/documents')({
       },
       // Upload a document: store metadata, chunk, embed, write document_chunks.
       POST: async ({ params, request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        if (!(await ownsProject(user.id, params.projectId))) {
+          return json({ error: 'project not found' }, 404)
+        }
         const form = await request.formData().catch(() => null)
         const file = form?.get('file')
         if (!(file instanceof File)) return json({ error: 'file is required' }, 400)

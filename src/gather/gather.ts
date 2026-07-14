@@ -8,11 +8,10 @@ import { DbError } from '../report/errors'
 import { Retrieval } from '../retrieval'
 import type { Channel, RetrievalError, RetrievedItem } from '../retrieval'
 import {
-  MAX_ROUNDS,
-  MAX_SOURCES,
   MIN_RELEVANCE,
   QUERIES_PER_ROUND,
   RESULTS_PER_QUERY,
+  loopBudgetFor,
 } from './config'
 import { PlanError } from './errors'
 import { planStep, type ProjectContext } from './plan'
@@ -83,6 +82,8 @@ export const runGather = (
     const retrieval = yield* Retrieval
     const now = new Date()
     const timeRange = recencyToTimeRange(recencyWindowDays)
+    // Wider windows earn deeper research (more rounds/sources, PRD 5.4).
+    const budget = loopBudgetFor(recencyWindowDays)
 
     // Planning step (main model).
     const plan = yield* planStep(questionText, project, recencyWindowDays)
@@ -151,11 +152,11 @@ export const runGather = (
     let stopReason = 'query_queue_empty'
 
     while (queue.length > 0) {
-      if (rounds >= MAX_ROUNDS) {
+      if (rounds >= budget.maxRounds) {
         stopReason = 'max_rounds'
         break
       }
-      if (workingSet.size >= MAX_SOURCES) {
+      if (workingSet.size >= budget.maxSources) {
         stopReason = 'max_sources'
         break
       }
@@ -286,7 +287,7 @@ export const runGather = (
       }
 
       // Sufficiency: coverage then saturation (PRD 5.4).
-      if (facetsCovered(facetSources)) {
+      if (facetsCovered(facetSources, budget.minSourcesPerFacet)) {
         stopReason = 'coverage'
         break
       }

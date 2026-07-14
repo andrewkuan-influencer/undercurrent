@@ -43,6 +43,10 @@ const missingConfig =
   (error: ConfigError): ProviderError =>
     new ProviderError({ channel, reason: `configuration error: ${error}` })
 
+/** A credential that is unset, blank, or the .env.example placeholder. */
+const isPlaceholder = (value: string): boolean =>
+  value.trim().length === 0 || value.trim() === '...'
+
 export const RetrievalLive = Layer.succeed(
   Retrieval,
   Retrieval.of({
@@ -51,15 +55,33 @@ export const RetrievalLive = Layer.succeed(
         Effect.mapError(missingConfig('web')),
         Effect.flatMap((apiKey) => searchWeb(apiKey, query, options)),
       ),
+    // Hybrid reddit channel: the direct Reddit API when real creds exist,
+    // otherwise Tavily restricted to reddit.com. The fallback carries no
+    // upvote/structured post data, so the direct API stays preferred (PRD 7);
+    // items are tagged channel 'reddit' either way.
     searchReddit: (query, options) =>
       Effect.all([
-        Config.string('REDDIT_CLIENT_ID'),
-        Config.string('REDDIT_CLIENT_SECRET'),
+        Config.string('REDDIT_CLIENT_ID').pipe(Config.withDefault('')),
+        Config.string('REDDIT_CLIENT_SECRET').pipe(Config.withDefault('')),
       ]).pipe(
         Effect.mapError(missingConfig('reddit')),
-        Effect.flatMap(([clientId, clientSecret]) =>
-          searchReddit({ clientId, clientSecret }, query, options),
-        ),
+        Effect.flatMap(([clientId, clientSecret]) => {
+          if (!isPlaceholder(clientId) && !isPlaceholder(clientSecret)) {
+            return searchReddit({ clientId, clientSecret }, query, options)
+          }
+          return Config.string('TAVILY_API_KEY').pipe(
+            Effect.mapError(missingConfig('reddit')),
+            Effect.flatMap((apiKey) =>
+              searchWeb(apiKey, query, {
+                timeRange: options?.timeRange,
+                maxResults: options?.maxResults,
+                timeoutMs: options?.timeoutMs,
+                includeDomains: ['reddit.com'],
+                tagChannel: 'reddit',
+              }),
+            ),
+          )
+        }),
       ),
     searchDocuments: (query, projectId, options) =>
       searchDocuments(query, projectId, options),

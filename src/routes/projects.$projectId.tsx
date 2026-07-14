@@ -236,53 +236,94 @@ function ProjectPage() {
         <p style={{ color: 'var(--coral)', fontSize: 12, marginTop: '0.4rem' }}>{uploadError}</p>
       ) : null}
 
-      {/* Questions */}
+      {/* Questions: follow-ups render indented under their parent (3 levels max). */}
       <h2>Questions</h2>
       {questions.length === 0 ? (
         <p className="muted">No questions asked yet.</p>
       ) : (
-        <ul className="clean">
-          {questions.map((q) => {
-            const pill = statusPill(q.status)
-            return (
-              <li
-                key={q.id}
-                className="card"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.7rem 1rem' }}
-              >
-                <span
-                  className={
-                    q.status === 'complete'
-                      ? 'dot dot-green'
-                      : q.status === 'failed'
-                        ? 'dot dot-coral'
-                        : 'dot dot-blue pulse'
-                  }
-                />
-                <Link
-                  to="/questions/$questionId"
-                  params={{ questionId: q.id }}
-                  style={{
-                    flex: 1,
-                    color: 'var(--text)',
-                    textDecoration: 'none',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {q.question}
-                </Link>
-                <span className={pill.className}>{pill.label}</span>
-                {q.parentQuestionId ? <span className="pill">follow-up</span> : null}
-                <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>
-                  {timeAgo(q.createdAt)}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
+        <QuestionTree questions={questions} />
       )}
     </div>
   )
+}
+
+type QuestionRow = ProjectData['questions'][number]
+
+/**
+ * Render root questions newest-first with their follow-up chains indented
+ * beneath them (a left rail per level, capped at 3 levels of follow-up).
+ */
+function QuestionTree({ questions }: { questions: QuestionRow[] }) {
+  const byParent = new Map<string, QuestionRow[]>()
+  const ids = new Set(questions.map((q) => q.id))
+  const roots: QuestionRow[] = []
+  for (const q of questions) {
+    if (q.parentQuestionId && ids.has(q.parentQuestionId)) {
+      const list = byParent.get(q.parentQuestionId) ?? []
+      list.push(q)
+      byParent.set(q.parentQuestionId, list)
+    } else {
+      roots.push(q)
+    }
+  }
+  // Children read top-down in creation order; roots stay newest-first.
+  for (const list of byParent.values()) {
+    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
+
+  const renderRow = (q: QuestionRow, depth: number): React.ReactNode => {
+    const pill = statusPill(q.status)
+    const children = byParent.get(q.id) ?? []
+    return (
+      <li key={q.id}>
+        <div
+          className="card"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            padding: depth > 0 ? '0.55rem 0.9rem' : '0.7rem 1rem',
+            marginLeft: Math.min(depth, 3) * 22,
+            borderLeft: depth > 0 ? '3px solid var(--blue-light)' : undefined,
+            marginBottom: '0.5rem',
+          }}
+        >
+          <span
+            className={
+              q.status === 'complete'
+                ? 'dot dot-green'
+                : q.status === 'failed'
+                  ? 'dot dot-coral'
+                  : 'dot dot-blue pulse'
+            }
+          />
+          <Link
+            to="/questions/$questionId"
+            params={{ questionId: q.id }}
+            style={{
+              flex: 1,
+              color: 'var(--text)',
+              textDecoration: 'none',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontSize: depth > 0 ? 13 : 14,
+            }}
+          >
+            {depth > 0 ? <span className="muted">↳ </span> : null}
+            {q.question}
+          </Link>
+          <span className={pill.className}>{pill.label}</span>
+          <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>
+            {timeAgo(q.createdAt)}
+          </span>
+        </div>
+        {children.length > 0 ? (
+          <ul className="clean">{children.map((c) => renderRow(c, depth + 1))}</ul>
+        ) : null}
+      </li>
+    )
+  }
+
+  return <ul className="clean">{roots.map((q) => renderRow(q, 0))}</ul>
 }

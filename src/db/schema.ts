@@ -17,6 +17,7 @@ import { EMBEDDING_DIMENSION } from '../config/embedding'
 // Better Auth CLI. Re-exported so drizzle-kit migrations and the db client see
 // them alongside the evidence-ledger tables.
 export * from './authSchema'
+import { user } from './authSchema'
 
 /**
  * The evidence-ledger schema (PRD 6, appendix DDL 13). The `sources` table is
@@ -28,14 +29,22 @@ export * from './authSchema'
  */
 
 // projects. Top-level container: audiences, topics, and the work done inside.
-export const projects = pgTable('projects', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  description: text('description'),
-  audiences: text('audiences').array(),
-  topics: text('topics').array(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+// owner_id scopes each project to the user who created it; a future sharing
+// model (a project_shares join table) extends this without rework. Nullable for
+// legacy rows, which the list query treats as invisible.
+export const projects = pgTable(
+  'projects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    audiences: text('audiences').array(),
+    topics: text('topics').array(),
+    ownerId: text('owner_id').references(() => user.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('projects_owner_id_idx').on(t.ownerId)],
+)
 
 // questions. First-class record with its own embedding, recency window, status,
 // and an optional parent for dive-deeper threads.

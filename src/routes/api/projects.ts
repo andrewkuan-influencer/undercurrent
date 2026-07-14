@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { desc } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { db } from '../../db/client'
 import { projects } from '../../db/schema'
 import { requireUser } from '../../auth/guard'
@@ -9,7 +9,9 @@ export const Route = createFileRoute('/api/projects')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        // Per-user scoping: only the caller's own projects (PRD 8).
         const rows = await db
           .select({
             id: projects.id,
@@ -20,11 +22,13 @@ export const Route = createFileRoute('/api/projects')({
             createdAt: projects.createdAt,
           })
           .from(projects)
+          .where(eq(projects.ownerId, user.id))
           .orderBy(desc(projects.createdAt))
         return json(rows)
       },
       POST: async ({ request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
         const body = (await request.json().catch(() => null)) as {
           name?: unknown
           description?: unknown
@@ -43,6 +47,7 @@ export const Route = createFileRoute('/api/projects')({
                 : null,
             audiences: normalizeList(body?.audiences),
             topics: normalizeList(body?.topics),
+            ownerId: user.id,
           })
           .returning({ id: projects.id })
         return json({ id: row!.id }, 201)

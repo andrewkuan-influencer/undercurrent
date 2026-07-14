@@ -44,6 +44,13 @@ export interface WebSearchOptions {
   readonly timeRange?: TimeRange
   readonly maxResults?: number
   readonly timeoutMs?: number
+  /** Restrict the provider's search to these domains (Tavily include_domains). */
+  readonly includeDomains?: ReadonlyArray<string>
+  /**
+   * Channel to stamp on the results. Defaults to 'web'; the reddit channel's
+   * Tavily fallback sets 'reddit' so downstream scoring and stats stay honest.
+   */
+  readonly tagChannel?: Channel
 }
 
 export interface RedditSearchOptions {

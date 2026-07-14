@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Effect } from 'effect'
 import { createQuestion } from '../../report/run'
-import { requireUser } from '../../auth/guard'
+import { ownsProject, requireUser } from '../../auth/guard'
 import { json } from '../../server/http'
 import { startRun } from '../../server/runBackground'
 
@@ -9,7 +9,8 @@ export const Route = createFileRoute('/api/questions')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
         const body = (await request.json().catch(() => null)) as {
           projectId?: unknown
           question?: unknown
@@ -20,6 +21,9 @@ export const Route = createFileRoute('/api/questions')({
           typeof body?.question === 'string' ? body.question.trim() : ''
         if (!projectId || !question) {
           return json({ error: 'projectId and question are required' }, 400)
+        }
+        if (!(await ownsProject(user.id, projectId))) {
+          return json({ error: 'project not found' }, 404)
         }
         const recencyWindowDays =
           typeof body?.recencyWindowDays === 'number' && body.recencyWindowDays > 0

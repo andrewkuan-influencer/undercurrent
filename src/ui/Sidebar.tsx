@@ -35,12 +35,6 @@ export function Sidebar({ user }: { user: SessionUser }) {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [questions, setQuestions] = useState<Record<string, QuestionRow[]>>({})
-  const [formOpen, setFormOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [audiences, setAudiences] = useState('')
-  const [topics, setTopics] = useState('')
-  const [saving, setSaving] = useState(false)
 
   const load = () =>
     fetch('/api/projects')
@@ -48,9 +42,10 @@ export function Sidebar({ user }: { user: SessionUser }) {
       .then(setProjects)
       .catch(() => setProjects([]))
 
+  // Reload the list when navigating (a new project may have just been created).
   useEffect(() => {
     void load()
-  }, [])
+  }, [pathname])
 
   const loadQuestions = (projectId: string) =>
     fetch(`/api/projects/${projectId}`)
@@ -70,28 +65,6 @@ export function Sidebar({ user }: { user: SessionUser }) {
     void navigate({ to: '/projects/$projectId', params: { projectId: id } })
   }
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    setSaving(true)
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, description, audiences, topics }),
-    })
-    const body = (await res.json().catch(() => null)) as { id?: string } | null
-    setSaving(false)
-    setName('')
-    setDescription('')
-    setAudiences('')
-    setTopics('')
-    setFormOpen(false)
-    void load()
-    if (body?.id) {
-      void navigate({ to: '/projects/$projectId', params: { projectId: body.id } })
-    }
-  }
-
   const selectedId = pathname.startsWith('/projects/')
     ? pathname.split('/')[2]
     : null
@@ -102,49 +75,16 @@ export function Sidebar({ user }: { user: SessionUser }) {
         <Link to="/" className="wordmark">
           <span className="star">✦</span> Undercurrent
         </Link>
-        <button
-          type="button"
-          className={formOpen ? 'secondary btn-pill' : 'btn-blue btn-pill'}
-          onClick={() => setFormOpen((v) => !v)}
+        <Link
+          to="/projects/new"
+          className="button-link"
+          style={{ borderRadius: 99, padding: '0.3rem 0.8rem', fontSize: 12, background: 'var(--blue)', color: '#fff', borderColor: 'var(--blue)' }}
         >
-          {formOpen ? 'Cancel' : '+ New'}
-        </button>
+          + New
+        </Link>
       </div>
 
       <div className="sidebar-body">
-        {formOpen ? (
-          <form onSubmit={create} className="stack" style={{ padding: '0.25rem 0.3rem 0.9rem' }}>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Project name"
-              autoFocus
-            />
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Client or brief (optional)"
-            />
-            <input
-              type="text"
-              value={audiences}
-              onChange={(e) => setAudiences(e.target.value)}
-              placeholder="Audiences, comma separated"
-            />
-            <input
-              type="text"
-              value={topics}
-              onChange={(e) => setTopics(e.target.value)}
-              placeholder="Topics, comma separated"
-            />
-            <button type="submit" className="btn-blue btn-pill" disabled={saving || !name.trim()} style={{ width: '100%' }}>
-              {saving ? 'Creating…' : 'Create project'}
-            </button>
-          </form>
-        ) : null}
-
         <span className="label" style={{ padding: '0 0.6rem', fontSize: 10 }}>
           Projects
         </span>
@@ -193,15 +133,16 @@ export function Sidebar({ user }: { user: SessionUser }) {
       <div className="sidebar-footer">
         <span
           className="muted"
-          style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           title={user.email}
         >
-          {user.email}
+          {user.name || user.email}
           {user.role ? <span className="pill pill-blue">{user.role}</span> : null}
         </span>
         <button
           type="button"
           className="secondary btn-pill"
+          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
           onClick={() => {
             void signOut().then(() => {
               window.location.href = '/signin'

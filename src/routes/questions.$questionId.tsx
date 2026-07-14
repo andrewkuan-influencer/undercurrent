@@ -1,11 +1,19 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { ReportBody } from '../ui/ReportBody'
+import { recencyLabel } from '../ui/recency'
 import type { InsightView, RenderedSourceView } from '../ui/insightView'
 
 export const Route = createFileRoute('/questions/$questionId')({
   component: QuestionPage,
 })
+
+interface QuestionStats {
+  web: number
+  reddit: number
+  doc: number
+  queries: number
+}
 
 interface QuestionData {
   id: string
@@ -14,6 +22,8 @@ interface QuestionData {
   status: string
   recencyWindowDays: number | null
   parentQuestionId: string | null
+  stats: QuestionStats
+  depth: number
   result: {
     resultId: string
     insight: InsightView
@@ -23,6 +33,7 @@ interface QuestionData {
 }
 
 const RUNNING = new Set(['gathering', 'synthesising'])
+const MAX_FOLLOW_UP_DEPTH = 3
 
 function QuestionPage() {
   const { questionId } = Route.useParams()
@@ -30,6 +41,7 @@ function QuestionPage() {
   const [data, setData] = useState<QuestionData | null>(null)
   const [notFound, setNotFound] = useState(false)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const prevStatus = useRef<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -41,6 +53,24 @@ function QuestionPage() {
       }
       const body = (await res.json()) as QuestionData
       if (!active) return
+
+      // Fire a system notification when a run finishes while the tab is hidden.
+      if (
+        prevStatus.current &&
+        RUNNING.has(prevStatus.current) &&
+        !RUNNING.has(body.status) &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted' &&
+        document.visibilityState === 'hidden'
+      ) {
+        const note = new Notification(
+          body.status === 'complete' ? 'Report ready' : 'Run did not complete',
+          { body: body.question.slice(0, 120) },
+        )
+        note.onclick = () => window.focus()
+      }
+      prevStatus.current = body.status
+
       setData(body)
       if (!RUNNING.has(body.status) && timer.current) {
         clearInterval(timer.current)
@@ -77,11 +107,17 @@ function QuestionPage() {
             follow-up
           </span>
         ) : null}
-        Recency window: {data.recencyWindowDays ?? '?'} days.
+        Recency window:{' '}
+        {data.recencyWindowDays ? recencyLabel(data.recencyWindowDays) : '?'}.
       </p>
 
+      <StatStrip stats={data.stats} />
+
       {RUNNING.has(data.status) ? (
-        <RunStatus status={data.status} />
+        <RunStatus
+          status={data.status}
+          recencyWindowDays={data.recencyWindowDays}
+        />
       ) : data.status === 'failed' ? (
         <p className="card">
           This run did not complete. It may have found no usable evidence. You can
@@ -95,12 +131,18 @@ function QuestionPage() {
             sources={data.result.sources}
           />
           <h2>Dive deeper</h2>
-          <DiveBox
-            questionId={questionId}
-            onDive={(id) =>
-              navigate({ to: '/questions/$questionId', params: { questionId: id } })
-            }
-          />
+          {data.depth >= MAX_FOLLOW_UP_DEPTH ? (
+            <p className="muted" style={{ fontSize: 13 }}>
+              Follow-up limit reached. Start a fresh question to go further.
+            </p>
+          ) : (
+            <DiveBox
+              questionId={questionId}
+              onDive={(id) =>
+                navigate({ to: '/questions/$questionId', params: { questionId: id } })
+              }
+            />
+          )}
         </div>
       ) : (
         <p className="muted">No report available.</p>
@@ -109,11 +151,81 @@ function QuestionPage() {
   )
 }
 
-function RunStatus({ status }: { status: string }) {
+/** Evidence summary strip: sources by channel plus queries issued (PRD 5.4). */
+function StatStrip({ stats }: { stats: QuestionStats }) {
+  if (!stats || stats.web + stats.reddit + stats.doc + stats.queries === 0) {
+    return null
+  }
+  const item = (n: number, label: string) => (
+    <span>
+      <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{n}</strong>{' '}
+      <span className="muted">{label}</span>
+    </span>
+  )
+  return (
+    <div
+      className="card"
+      style={{
+        display: 'flex',
+        gap: '1.25rem',
+        flexWrap: 'wrap',
+        padding: '0.6rem 1rem',
+        fontSize: 13,
+        alignItems: 'center',
+      }}
+    >
+      {item(stats.web, stats.web === 1 ? 'website' : 'websites')}
+      {item(stats.reddit, 'Reddit')}
+      {item(stats.doc, stats.doc === 1 ? 'document' : 'documents')}
+      {item(stats.queries, 'queries run')}
+    </div>
+  )
+}
+
+/** No dead air during a run: rotate a playful waiting line every few seconds. */
+const WAITING_MESSAGES = [
+  'Asking Reddit very nicely…',
+  'Reading the comments so you do not have to…',
+  'Cross-referencing the group chat of the internet…',
+  'Sorting signal from noise…',
+  'Politely interviewing the web…',
+  'Counting hot takes…',
+  'Following the thread, literally…',
+  'Checking who actually said what…',
+  'Sifting for verbatims worth quoting…',
+  'Weighing the obvious against the unexpected…',
+  'Chasing the tension in the replies…',
+  'Filtering out the bots…',
+  'Taking the temperature of culture…',
+  'Connecting dots across a hundred tabs…',
+]
+
+function RunStatus({
+  status,
+  recencyWindowDays,
+}: {
+  status: string
+  recencyWindowDays: number | null
+}) {
+  const [msgIdx, setMsgIdx] = useState(0)
+  const [notifyState, setNotifyState] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied',
+  )
+
+  useEffect(() => {
+    const t = setInterval(
+      () => setMsgIdx((i) => (i + 1) % WAITING_MESSAGES.length),
+      2500,
+    )
+    return () => clearInterval(t)
+  }, [])
+
+  const wideWindow = (recencyWindowDays ?? 0) >= 365
   const message =
     status === 'gathering'
       ? 'Gathering evidence across the web and Reddit…'
       : 'Writing the report from the evidence…'
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div
@@ -130,10 +242,35 @@ function RunStatus({ status }: { status: string }) {
         <span className="label" style={{ margin: 0, color: 'var(--text)' }}>
           {status === 'gathering' ? 'Agent researching…' : 'Synthesising…'}
         </span>
+        {notifyState === 'default' ? (
+          <button
+            type="button"
+            className="secondary btn-pill"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => {
+              void Notification.requestPermission().then(setNotifyState)
+            }}
+          >
+            Notify me when done
+          </button>
+        ) : notifyState === 'granted' ? (
+          <span className="muted" style={{ marginLeft: 'auto', fontSize: 11 }}>
+            ✓ You will be notified
+          </span>
+        ) : null}
       </div>
-      <p className="muted" style={{ margin: 0, padding: '0.8rem 1.1rem', fontSize: 13 }}>
-        {message} This can take a minute or two. The page updates itself.
-      </p>
+      <div style={{ padding: '0.8rem 1.1rem' }}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          {message}{' '}
+          {wideWindow
+            ? 'Wider windows dig deeper, so this can take several minutes.'
+            : 'This can take a minute or two.'}{' '}
+          You can close this page, the run continues on the server.
+        </p>
+        <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: 12, fontStyle: 'italic' }}>
+          {WAITING_MESSAGES[msgIdx]}
+        </p>
+      </div>
     </div>
   )
 }
@@ -189,24 +326,27 @@ function DiveBox({
 }) {
   const [followUp, setFollowUp] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!followUp.trim()) return
     setBusy(true)
+    setError(null)
     const res = await fetch(`/api/questions/${questionId}/dive`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ question: followUp }),
     })
-    const body = (await res.json()) as { questionId?: string }
+    const body = (await res.json()) as { questionId?: string; error?: string }
     setBusy(false)
     if (body.questionId) onDive(body.questionId)
+    else if (body.error) setError(body.error)
   }
 
   return (
     <form onSubmit={submit} className="stack">
-      <p className="muted" style={{ margin: 0 }}>
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>
         A follow-up builds on this question's evidence and only retrieves what it
         newly needs.
       </p>
@@ -215,6 +355,9 @@ function DiveBox({
         onChange={(e) => setFollowUp(e.target.value)}
         placeholder="e.g. What does this mean for skincare specifically?"
       />
+      {error ? (
+        <p style={{ color: 'var(--coral)', fontSize: 13, margin: 0 }}>{error}</p>
+      ) : null}
       <div>
         <button type="submit" disabled={busy || !followUp.trim()}>
           {busy ? 'Starting…' : 'Ask follow-up'}

@@ -2,13 +2,17 @@ import { MIN_SOURCES_PER_FACET, SATURATION_RATIO } from './config'
 
 /**
  * Coverage (PRD 5.4): the loop has enough when every planned facet is backed by
- * at least MIN_SOURCES_PER_FACET distinct relevant, in-window sources. Judged on
- * structure, never on token or link count. An empty plan is never "covered".
+ * at least minSourcesPerFacet distinct relevant, in-window sources (scaled from
+ * the recency window, defaulting to the base constant). Judged on structure,
+ * never on token or link count. An empty plan is never "covered".
  */
-export function facetsCovered(facetSources: Map<string, Set<string>>): boolean {
+export function facetsCovered(
+  facetSources: Map<string, Set<string>>,
+  minSourcesPerFacet: number = MIN_SOURCES_PER_FACET,
+): boolean {
   if (facetSources.size === 0) return false
   for (const set of facetSources.values()) {
-    if (set.size < MIN_SOURCES_PER_FACET) return false
+    if (set.size < minSourcesPerFacet) return false
   }
   return true
 }

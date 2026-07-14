@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../../db/client'
 import { projects, questions } from '../../db/schema'
 import { requireUser } from '../../auth/guard'
@@ -9,7 +9,9 @@ export const Route = createFileRoute('/api/projects/$projectId')({
   server: {
     handlers: {
       GET: async ({ params, request }) => {
-        if (!(await requireUser(request))) return json({ error: 'unauthorized' }, 401)
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        // Ownership scoping: 404 for anyone but the owner (PRD 8).
         const rows = await db
           .select({
             id: projects.id,
@@ -19,7 +21,7 @@ export const Route = createFileRoute('/api/projects/$projectId')({
             topics: projects.topics,
           })
           .from(projects)
-          .where(eq(projects.id, params.projectId))
+          .where(and(eq(projects.id, params.projectId), eq(projects.ownerId, user.id)))
           .limit(1)
         const project = rows[0]
         if (!project) return json({ error: 'project not found' }, 404)

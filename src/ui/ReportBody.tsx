@@ -66,7 +66,20 @@ export function ReportBody({
 }) {
   const indexById = new Map<string, number>()
   sources.forEach((s, i) => indexById.set(s.id, i + 1))
+  const sourceByIndex = new Map<number, RenderedSourceView>()
+  sources.forEach((s, i) => sourceByIndex.set(i + 1, s))
 
+  const domainOf = (url: string | null): string | null => {
+    if (!url) return null
+    try {
+      return new URL(url).hostname.replace(/^www\./, '')
+    } catch {
+      return null
+    }
+  }
+
+  // Hovering a citation shows the website name and a link; clicking the number
+  // still jumps to the reference list.
   const Cites = ({ ids }: { ids: string[] }) => {
     const refs = ids
       .map((id) => indexById.get(id))
@@ -74,12 +87,28 @@ export function ReportBody({
     if (refs.length === 0) return null
     return (
       <sup>
-        {refs.map((n) => (
-          <span key={n}>
-            {' '}
-            <a href={`#source-${n}`}>[{n}]</a>
-          </span>
-        ))}
+        {refs.map((n) => {
+          const src = sourceByIndex.get(n)
+          const domain = domainOf(src?.url ?? null)
+          return (
+            <span key={n} className="cite">
+              {' '}
+              <a href={`#source-${n}`}>[{n}]</a>
+              {src ? (
+                <span className="cite-tip">
+                  {src.url ? (
+                    <a href={src.url} target="_blank" rel="noopener noreferrer">
+                      {src.title ?? domain ?? src.url}
+                    </a>
+                  ) : (
+                    <span className="cite-title">{src.title ?? 'Untitled source'}</span>
+                  )}
+                  {domain ? <span className="cite-domain">{domain}</span> : null}
+                </span>
+              ) : null}
+            </span>
+          )
+        })}
       </sup>
     )
   }
@@ -177,9 +206,17 @@ export function ReportBody({
                 {s.verifiedLive ? <span className="pill pill-green">verified</span> : null}
               </div>
               {s.excerpt ? (
-                <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: 12 }}>
-                  {s.excerpt.slice(0, 280)}
-                  {s.excerpt.length > 280 ? '…' : ''}
+                <p
+                  className="muted"
+                  style={{
+                    margin: '0.25rem 0 0',
+                    fontSize: 12,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {s.excerpt}
                 </p>
               ) : null}
             </li>

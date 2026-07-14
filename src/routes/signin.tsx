@@ -43,14 +43,7 @@ function SignInPage() {
       >
         ✦
       </div>
-      <h1 style={{ marginBottom: '0.2rem' }}>Sign in</h1>
-      <p className="label" style={{ margin: '0 0 1rem' }}>
-        Undercurrent · Restricted access
-      </p>
-      <p className="muted" style={{ fontSize: 13, margin: '0 0 1.25rem' }}>
-        Limited to influencer.com accounts. Sign in with your work Google
-        account.
-      </p>
+      <h1 style={{ marginBottom: '1.1rem' }}>Sign in</h1>
       <button type="button" onClick={google} disabled={busy} style={{ width: '100%' }}>
         {busy ? 'Redirecting…' : 'Sign in with Google →'}
       </button>

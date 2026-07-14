@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import { DEFAULT_MAX_RESULTS, DEFAULT_TIMEOUT_MS } from './constants'
 import { EmptyResultsError } from './errors'
 import { fetchJson } from './http'
-import type { RetrievedItem, WebSearchOptions } from './types'
+import type { Channel, RetrievedItem, WebSearchOptions } from './types'
 
 interface TavilyResult {
   url?: string
@@ -18,11 +18,11 @@ function toDate(value: string | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-function normalise(r: TavilyResult): RetrievedItem | null {
+function normalise(r: TavilyResult, channel: Channel): RetrievedItem | null {
   if (!r.url) return null
   const raw = typeof r.raw_content === 'string' ? r.raw_content.trim() : ''
   return {
-    channel: 'web',
+    channel,
     url: r.url,
     title: r.title ?? null,
     content: raw.length > 0 ? raw : (r.content ?? ''),
@@ -35,6 +35,8 @@ function normalise(r: TavilyResult): RetrievedItem | null {
  * Tavily web search with content extraction in one call (PRD 7). `timeRange`
  * scopes freshness at the provider. include_raw_content pulls the extracted
  * page body, falling back to the snippet when extraction is unavailable.
+ * `includeDomains` restricts the search (used by the reddit channel's fallback),
+ * with `tagChannel` stamping the results accordingly.
  */
 export const searchWeb = (
   apiKey: string,
@@ -42,16 +44,20 @@ export const searchWeb = (
   options: WebSearchOptions = {},
 ) =>
   Effect.gen(function* () {
+    const channel = options.tagChannel ?? 'web'
     const body = {
       query,
       max_results: options.maxResults ?? DEFAULT_MAX_RESULTS,
       search_depth: 'advanced',
       include_raw_content: true,
       ...(options.timeRange ? { time_range: options.timeRange } : {}),
+      ...(options.includeDomains?.length
+        ? { include_domains: options.includeDomains }
+        : {}),
     }
 
     const json = yield* fetchJson({
-      channel: 'web',
+      channel,
       url: 'https://api.tavily.com/search',
       timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       init: {
@@ -66,11 +72,11 @@ export const searchWeb = (
 
     const results = (json as { results?: TavilyResult[] }).results ?? []
     const items = results
-      .map(normalise)
+      .map((r) => normalise(r, channel))
       .filter((x): x is RetrievedItem => x !== null)
 
     if (items.length === 0) {
-      return yield* new EmptyResultsError({ channel: 'web', query })
+      return yield* new EmptyResultsError({ channel, query })
     }
     return items
   })

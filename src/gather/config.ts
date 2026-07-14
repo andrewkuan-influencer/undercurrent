@@ -19,6 +19,36 @@ export const MAX_ROUNDS = 4
 /** Hard cap on total distinct sources gathered for one question. */
 export const MAX_SOURCES = 40
 
+/** The loop's caps for one run, scaled from the question's recency window. */
+export interface LoopBudget {
+  readonly maxRounds: number
+  readonly maxSources: number
+  readonly minSourcesPerFacet: number
+}
+
+/**
+ * Wider windows earn deeper research: five years has more ground to cover than
+ * two weeks. Coverage and saturation stay the primary stop conditions; these
+ * budgets are the caps. The base tier equals the constants above, so narrow
+ * questions behave exactly as before.
+ */
+export function loopBudgetFor(recencyWindowDays: number): LoopBudget {
+  if (recencyWindowDays <= 31) {
+    return {
+      maxRounds: MAX_ROUNDS,
+      maxSources: MAX_SOURCES,
+      minSourcesPerFacet: MIN_SOURCES_PER_FACET,
+    }
+  }
+  if (recencyWindowDays <= 274) {
+    return { maxRounds: 6, maxSources: 60, minSourcesPerFacet: 4 }
+  }
+  if (recencyWindowDays <= 730) {
+    return { maxRounds: 8, maxSources: 80, minSourcesPerFacet: 5 }
+  }
+  return { maxRounds: 10, maxSources: 100, minSourcesPerFacet: 6 }
+}
+
 // --- Supporting knobs (pacing and per-item budgets), same file for one home. ---
 
 /** Queries issued per round, popped from the planned-query queue. */

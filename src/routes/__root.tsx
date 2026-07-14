@@ -258,6 +258,25 @@ const GLOBAL_CSS = `
   }
   sup a { text-decoration: none; font-size: 0.72em; color: var(--blue); font-weight: 600; }
   .stack > * + * { margin-top: 0.7rem; }
+
+  /* Hoverable citations: the tooltip touches the superscript so hover persists
+     while moving onto the link inside it. */
+  .cite { position: relative; }
+  .cite .cite-tip {
+    display: none; position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%); z-index: 50;
+    background: var(--text); color: #fff; border-radius: 8px;
+    padding: 0.45rem 0.65rem; width: max-content; max-width: 260px;
+    font-size: 11px; font-weight: 400; line-height: 1.45; text-align: left;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  .cite:hover .cite-tip { display: block; }
+  .cite-tip a, .cite-tip .cite-title {
+    display: block; color: #fff; max-width: 240px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cite-tip a { text-decoration: underline; }
+  .cite-tip .cite-domain { display: block; color: #b8b8b8; margin-top: 1px; }
 `
 
 function RootComponent() {
