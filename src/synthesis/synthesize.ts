@@ -57,18 +57,28 @@ export const synthesize = (
   Effect.gen(function* () {
     const systemPrompt = yield* loadSynthesisPrompt
 
-    const sourcesForModel = workingSet.map((s) => ({
-      id: s.id,
-      channel: s.channel,
-      title: s.title,
-      url: s.url,
-      excerpt: s.excerpt.replace(/\s+/g, ' ').trim().slice(0, EXCERPT_LIMIT),
-    }))
+    // Present each source with a small integer `ref`, never its real id. A model
+    // reliably copies a one or two digit number back into a citation array, but
+    // mangles a 36-character UUID (dropping a hyphen is enough to fail THE rule).
+    // We resolve each ref back to the real id below, so the model never has to
+    // transcribe an id at all.
+    const refToId = new Map<string, string>()
+    const sourcesForModel = workingSet.map((s, i) => {
+      const ref = i + 1
+      refToId.set(String(ref), s.id)
+      return {
+        ref,
+        channel: s.channel,
+        title: s.title,
+        url: s.url,
+        excerpt: s.excerpt.replace(/\s+/g, ' ').trim().slice(0, EXCERPT_LIMIT),
+      }
+    })
 
     const userContent = [
       `Question: ${questionText}`,
       '',
-      'Sources (cite only these ids):',
+      'Sources (cite only these ref numbers):',
       JSON.stringify(sourcesForModel, null, 2),
     ].join('\n')
 
@@ -100,44 +110,78 @@ export const synthesize = (
     )
 
     // Collect every citation across the six components, tagged by which
-    // component made it, then enforce THE rule: each id must be in the working
-    // set. An unknown id fails hard; nothing is written.
-    const groups: Array<[CitationGroup, ReadonlyArray<string>]> = [
+    // component made it, then enforce THE rule: each ref must resolve to a
+    // source in the working set. An unresolvable ref fails hard; nothing is
+    // written and no id is repaired to make output validate.
+    type Ref = string | number
+    const groups: Array<[CitationGroup, ReadonlyArray<Ref>]> = [
       ['headline', insight.headline.citations],
       ...insight.topicBreakdown.map(
-        (t) => ['topic', t.citations] as [CitationGroup, ReadonlyArray<string>],
+        (t) => ['topic', t.citations] as [CitationGroup, ReadonlyArray<Ref>],
       ),
       ...insight.tensions.map(
-        (t) => ['tension', t.citations] as [CitationGroup, ReadonlyArray<string>],
+        (t) => ['tension', t.citations] as [CitationGroup, ReadonlyArray<Ref>],
       ),
       ...insight.consumerVoice.map(
         (c) =>
-          ['consumer_voice', c.citations] as [CitationGroup, ReadonlyArray<string>],
+          ['consumer_voice', c.citations] as [CitationGroup, ReadonlyArray<Ref>],
       ),
       ...insight.creatorAngles.map(
         (a) =>
-          ['creator_angle', a.citations] as [CitationGroup, ReadonlyArray<string>],
+          ['creator_angle', a.citations] as [CitationGroup, ReadonlyArray<Ref>],
       ),
     ]
 
-    const known = new Set(workingSet.map((s) => s.id))
+    // Normalise "3", 3, "[3]", "ref 3" to the bare digits; an out-of-range ref
+    // still returns null and fails hard, so this forgives formatting without
+    // weakening the rule.
+    const resolveRef = (rawRef: string | number): string | null => {
+      const match = String(rawRef).match(/\d+/)
+      const key = match ? match[0] : String(rawRef).trim()
+      return refToId.get(key) ?? null
+    }
+
     const citations: BoundCitation[] = []
     const seen = new Set<string>()
-    for (const [group, ids] of groups) {
-      for (const id of ids) {
-        if (!known.has(id)) {
+    for (const [group, refs] of groups) {
+      for (const rawRef of refs) {
+        const sourceId = resolveRef(rawRef)
+        if (!sourceId) {
           return yield* new UnknownCitationError({
-            citationId: id,
-            knownIds: [...known],
+            citationId: String(rawRef),
+            knownIds: [...refToId.keys()],
           })
         }
-        const dedupeKey = `${group}::${id}`
+        const dedupeKey = `${group}::${sourceId}`
         if (!seen.has(dedupeKey)) {
           seen.add(dedupeKey)
-          citations.push({ sourceId: id, blockType: group })
+          citations.push({ sourceId, blockType: group })
         }
       }
     }
 
-    return { insight, citations }
+    // Persist real source ids in the stored insight, not the model's refs: the
+    // ref numbers are only a transcription aid for the model call, and every
+    // downstream reader (the report UI, the frozen snapshots) keys off source
+    // ids. Every ref resolved above, so this cannot introduce an unknown id.
+    const normCites = (refs: ReadonlyArray<string | number>): string[] =>
+      refs.map(resolveRef).filter((x): x is string => x !== null)
+    const normalized: Insight = {
+      headline: { ...insight.headline, citations: normCites(insight.headline.citations) },
+      topicBreakdown: insight.topicBreakdown.map((t) => ({
+        ...t,
+        citations: normCites(t.citations),
+      })),
+      tensions: insight.tensions.map((t) => ({ ...t, citations: normCites(t.citations) })),
+      consumerVoice: insight.consumerVoice.map((c) => ({
+        ...c,
+        citations: normCites(c.citations),
+      })),
+      creatorAngles: insight.creatorAngles.map((a) => ({
+        ...a,
+        citations: normCites(a.citations),
+      })),
+    }
+
+    return { insight: normalized, citations }
   })

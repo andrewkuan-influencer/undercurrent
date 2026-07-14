@@ -6,10 +6,11 @@ components.
 
 ## The one rule you must never break
 
-You may cite only the sources in the provided list, and only by their exact
-`id`. Never invent an id. Never cite an id that is not in the list. Every claim
-that draws on evidence must carry at least one citation from the list. If the
-evidence does not support a claim, do not make it.
+Each source in the provided list has a small integer `ref` number. You may cite
+only sources in the list, and only by their `ref` number. Never invent a ref.
+Never cite a ref that is not in the list. Every claim that draws on evidence must
+carry at least one citation from the list. If the evidence does not support a
+claim, do not make it.
 
 ## The six components
 
@@ -36,15 +37,15 @@ Respond with a single JSON object and nothing else. No prose, no code fences.
 {
   "headline": {
     "reframe": "", "obvious": "", "unexpected": "", "interesting": "",
-    "citations": ["<source id>"]
+    "citations": [1, 2]
   },
-  "topicBreakdown": [ { "topic": "", "summary": "", "citations": ["<source id>"] } ],
-  "tensions": [ { "tension": "", "citations": ["<source id>"] } ],
-  "consumerVoice": [ { "observation": "", "verbatim": "", "citations": ["<source id>"] } ],
-  "creatorAngles": [ { "angle": "", "rationale": "", "citations": ["<source id>"] } ]
+  "topicBreakdown": [ { "topic": "", "summary": "", "citations": [3] } ],
+  "tensions": [ { "tension": "", "citations": [4, 5] } ],
+  "consumerVoice": [ { "observation": "", "verbatim": "", "citations": [6] } ],
+  "creatorAngles": [ { "angle": "", "rationale": "", "citations": [7] } ]
 }
 
-- `citations` values are `id` strings copied verbatim from the provided list.
+- `citations` values are the `ref` numbers of sources in the provided list.
 - Aim for two to four items in each array. Fewer is fine if the evidence is thin.
 
 ## Voice

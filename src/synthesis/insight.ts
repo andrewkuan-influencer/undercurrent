@@ -7,11 +7,18 @@ import { Schema } from 'effect'
  * the sources list itself is rendered from the frozen citation snapshots.
  *
  * Citation arrays default to empty so a partial model response still decodes;
- * the citation rule is enforced separately on whatever ids are present.
+ * the citation rule is enforced separately on whatever refs are present.
+ *
+ * Values are the small integer reference numbers the model is shown for each
+ * source, not raw ids: the model cites e.g. `3`, and synthesis resolves that
+ * ref back to the real source id (a model reliably copies a one or two digit
+ * number, but mangles a 36-character UUID). Both a number and its string form
+ * are accepted since models are inconsistent about quoting numerics in JSON.
  */
-const citations = Schema.optionalWith(Schema.Array(Schema.String), {
-  default: () => [],
-})
+const citations = Schema.optionalWith(
+  Schema.Array(Schema.Union(Schema.String, Schema.Number)),
+  { default: () => [] },
+)
 
 /** Component 1: the headline reframe, through the obvious/unexpected/interesting lens. */
 export const Headline = Schema.Struct({
