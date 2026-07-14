@@ -1,4 +1,16 @@
 import type { InsightView, RenderedSourceView } from './insightView'
+import { SECTION_TONES, type SectionTone } from './reportTheme'
+
+/** Colour-coded uppercase section label, so the report reads as a designed document. */
+function Eyebrow({ tone, children }: { tone: SectionTone; children: string }) {
+  return (
+    <div>
+      <span className="eyebrow" style={{ color: tone.fg, background: tone.bg }}>
+        {children}
+      </span>
+    </div>
+  )
+}
 
 /**
  * The read-only rendering of the six report components plus the verified sources
@@ -34,8 +46,8 @@ export function ReportBody({
 
   return (
     <div className="prose">
-      <h2>Headline reframe</h2>
-      <p style={{ fontSize: '1.25rem', lineHeight: 1.4 }}>
+      <Eyebrow tone={SECTION_TONES.headline}>Headline reframe</Eyebrow>
+      <p style={{ fontSize: '1.35rem', lineHeight: 1.35, fontWeight: 500, letterSpacing: '-0.01em' }}>
         {insight.headline.reframe}
         <Cites ids={insight.headline.citations} />
       </p>
@@ -51,7 +63,7 @@ export function ReportBody({
         </div>
       </div>
 
-      <h2>Topic breakdown</h2>
+      <Eyebrow tone={SECTION_TONES.topic}>Topic breakdown</Eyebrow>
       <ul className="clean stack">
         {insight.topicBreakdown.map((t, i) => (
           <li key={i}>
@@ -61,7 +73,7 @@ export function ReportBody({
         ))}
       </ul>
 
-      <h2>Tensions</h2>
+      <Eyebrow tone={SECTION_TONES.tensions}>Tensions</Eyebrow>
       <ul className="clean stack">
         {insight.tensions.map((t, i) => (
           <li key={i}>
@@ -71,7 +83,7 @@ export function ReportBody({
         ))}
       </ul>
 
-      <h2>Consumer voice</h2>
+      <Eyebrow tone={SECTION_TONES.consumer}>Consumer voice</Eyebrow>
       <ul className="clean stack">
         {insight.consumerVoice.map((c, i) => (
           <li key={i}>
@@ -84,7 +96,7 @@ export function ReportBody({
         ))}
       </ul>
 
-      <h2>Suggested creator angles</h2>
+      <Eyebrow tone={SECTION_TONES.creator}>Suggested creator angles</Eyebrow>
       <ul className="clean stack">
         {insight.creatorAngles.map((a, i) => (
           <li key={i}>
@@ -94,7 +106,7 @@ export function ReportBody({
         ))}
       </ul>
 
-      <h2>Verified sources</h2>
+      <Eyebrow tone={SECTION_TONES.sources}>Verified sources</Eyebrow>
       <ol className="clean stack">
         {sources.map((s, i) => (
           <li key={s.id} id={`source-${i + 1}`} className="card">

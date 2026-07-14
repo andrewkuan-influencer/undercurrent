@@ -1,3 +1,4 @@
+import '@fontsource-variable/dm-sans'
 import {
   HeadContent,
   Link,
@@ -39,70 +40,127 @@ export const Route = createRootRoute({
   component: RootComponent,
 })
 
-// Plain, unbranded styling: system typography, generous spacing, neutral rules.
-// A colour system and brand pass come later.
+// Brand pass: DM Sans, a teal accent on a warm-neutral ground, rounded surfaces
+// with a soft shadow, and uppercase tracked eyebrow labels. Light-only, matching
+// the reference design. Everything is driven through the tokens on :root.
 const GLOBAL_CSS = `
-  :root { --measure: 46rem; color-scheme: light dark; }
+  :root {
+    --measure: 42rem;
+    --font-sans: "DM Sans Variable", system-ui, -apple-system, sans-serif;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #7c7c85;
+    --border: #e5e5e5;
+    --teal: #0d9488;
+    --teal-strong: #0f766e;
+    --teal-light: #f0fdfa;
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --shadow: 0 1px 2px rgba(17,24,39,0.04), 0 4px 16px rgba(17,24,39,0.05);
+    color-scheme: light;
+  }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.55;
-    color: #16181d;
-    background: #fbfbfa;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
   }
-  a { color: inherit; }
+  a { color: var(--teal-strong); }
+  ::selection { background: #cbfaf0; }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+
   .site-header {
-    border-bottom: 1px solid rgba(0,0,0,0.12);
-    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.9rem 1.5rem;
   }
-  .site-header a { font-weight: 600; letter-spacing: 0.02em; text-decoration: none; }
-  .container { max-width: 60rem; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+  .brand { display: inline-flex; flex-direction: column; text-decoration: none; line-height: 1.1; }
+  .brand-name { font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; color: var(--teal-strong); }
+  .brand-tag { font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-top: 0.1rem; }
+
+  .container { max-width: 60rem; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
   .prose { max-width: var(--measure); }
+
+  h1 { font-size: 2rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; margin: 0 0 0.6rem; }
   h1, h2, h3 { line-height: 1.2; }
   h2 {
-    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #565b64; margin: 2.5rem 0 0.75rem;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 600;
+    color: var(--muted); margin: 2.5rem 0 0.75rem;
   }
-  label { display: block; font-size: 0.85rem; color: #565b64; margin-bottom: 0.25rem; }
-  input[type="text"], textarea, select {
-    width: 100%; font: inherit; padding: 0.5rem 0.6rem;
-    border: 1px solid rgba(0,0,0,0.25); border-radius: 6px; background: #fff; color: inherit;
+
+  label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--fg); margin-bottom: 0.3rem; }
+  input[type="text"], input[type="file"], textarea, select {
+    width: 100%; font: inherit; padding: 0.55rem 0.7rem;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--fg);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--teal);
+    box-shadow: 0 0 0 3px rgba(13,148,136,0.15);
   }
   textarea { min-height: 4.5rem; resize: vertical; }
+  input[type="range"] { width: 100%; accent-color: var(--teal); }
+
   button {
-    font: inherit; padding: 0.5rem 0.9rem; border: 1px solid rgba(0,0,0,0.35);
-    border-radius: 6px; background: #16181d; color: #fff; cursor: pointer;
+    font: inherit; font-weight: 500; padding: 0.55rem 1rem; border: 1px solid var(--teal);
+    border-radius: var(--radius-sm); background: var(--teal); color: #fff; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
   }
-  button.secondary { background: #fff; color: #16181d; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  ul.clean { list-style: none; padding: 0; margin: 0; }
+  button:hover:not(:disabled) { background: var(--teal-strong); border-color: var(--teal-strong); }
+  button.secondary { background: var(--surface); color: var(--teal-strong); border-color: var(--border); }
+  button.secondary:hover:not(:disabled) { background: var(--teal-light); border-color: var(--teal); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  a.button-link {
+    display: inline-block; text-decoration: none; font-weight: 500;
+    padding: 0.55rem 1rem; border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--teal-strong); border: 1px solid var(--border);
+  }
+  a.button-link:hover { background: var(--teal-light); border-color: var(--teal); }
+
+  ul.clean, ol.clean { list-style: none; padding: 0; margin: 0; }
   .card {
-    border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; padding: 1rem 1.15rem;
-    background: #fff; margin-bottom: 0.75rem;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem;
+    background: var(--surface); box-shadow: var(--shadow); margin-bottom: 0.75rem;
   }
-  .muted { color: #565b64; }
+  a.card-link { text-decoration: none; }
+  a.card-link:hover .card { border-color: var(--teal); }
+
+  .muted { color: var(--muted); }
   .pill {
-    display: inline-block; font-size: 0.72rem; padding: 0.1rem 0.45rem;
-    border: 1px solid rgba(0,0,0,0.2); border-radius: 999px; margin-left: 0.4rem;
+    display: inline-block; font-size: 0.7rem; font-weight: 500; padding: 0.12rem 0.5rem;
+    border-radius: 999px; margin-left: 0.4rem;
+    background: var(--teal-light); color: var(--teal-strong); border: 1px solid #cdefe9;
   }
-  .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
-  .tag { font-size: 0.75rem; padding: 0.1rem 0.5rem; border: 1px solid rgba(0,0,0,0.18); border-radius: 4px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .tag {
+    font-size: 0.74rem; padding: 0.14rem 0.55rem; border-radius: 999px;
+    background: #f4f4f5; color: #52525b; border: 1px solid var(--border);
+  }
+  .eyebrow {
+    display: inline-block; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 6px; margin: 2.5rem 0 0.85rem;
+  }
   blockquote {
-    margin: 0.5rem 0; padding-left: 0.9rem; border-left: 3px solid rgba(0,0,0,0.25);
-    font-style: italic;
+    margin: 0.6rem 0; padding: 0.4rem 0 0.4rem 0.95rem; border-left: 3px solid var(--teal);
+    color: #3f3f46; font-style: italic; background: var(--teal-light); border-radius: 0 6px 6px 0;
   }
-  sup a { text-decoration: none; font-size: 0.7em; }
-  .stack > * + * { margin-top: 0.6rem; }
-  @media (prefers-color-scheme: dark) {
-    body { color: #e9eaec; background: #14151a; }
-    .site-header { border-color: rgba(255,255,255,0.14); }
-    input[type="text"], textarea, select { background: #1d1f26; border-color: rgba(255,255,255,0.25); }
-    .card { background: #1a1c22; border-color: rgba(255,255,255,0.14); }
-    button { background: #e9eaec; color: #14151a; border-color: rgba(255,255,255,0.3); }
-    button.secondary { background: #1d1f26; color: #e9eaec; }
-    .muted, h2 { color: #a2a7b0; }
+  sup a { text-decoration: none; font-size: 0.7em; color: var(--teal-strong); font-weight: 600; }
+  .stack > * + * { margin-top: 0.7rem; }
+
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .status-dot {
+    display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 999px;
+    background: var(--teal); margin-right: 0.5rem; vertical-align: middle;
+    animation: pulse-dot 1.4s ease-in-out infinite;
   }
+  @media (prefers-reduced-motion: reduce) { .status-dot { animation: none; } }
 `
 
 function RootComponent() {
@@ -113,17 +171,23 @@ function RootComponent() {
     <RootDocument>
       <header
         className="site-header"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}
       >
-        <Link to="/">Undercurrent</Link>
+        <Link to="/" className="brand">
+          <span className="brand-name">Undercurrent</span>
+          <span className="brand-tag">Cultural &amp; Social Insight</span>
+        </Link>
         {user ? (
-          <span style={{ fontSize: '0.85rem' }} className="muted">
-            {user.email}
-            {user.role ? <span className="pill">{user.role}</span> : null}{' '}
+          <span
+            className="muted"
+            style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <span>{user.email}</span>
+            {user.role ? <span className="pill">{user.role}</span> : null}
             <button
               type="button"
               className="secondary"
-              style={{ marginLeft: '0.5rem', padding: '0.25rem 0.6rem' }}
+              style={{ padding: '0.3rem 0.7rem' }}
               onClick={() => {
                 void signOut().then(() => {
                   window.location.href = '/signin'

@@ -107,7 +107,10 @@ function RunStatus({ status }: { status: string }) {
       : 'Writing the report from the evidence…'
   return (
     <div className="card">
-      <strong>{status === 'gathering' ? 'Gathering' : 'Synthesising'}</strong>
+      <strong>
+        <span className="status-dot" />
+        {status === 'gathering' ? 'Gathering' : 'Synthesising'}
+      </strong>
       <p className="muted" style={{ margin: '0.35rem 0 0' }}>
         {message} This can take a minute or two. The page updates itself.
       </p>
@@ -137,7 +140,7 @@ function ShareBar({ shareToken }: { shareToken: string | null }) {
       >
         {copied ? 'Copied' : 'Copy shareable link'}
       </button>
-      <a className="secondary" style={{ padding: '0.5rem 0.9rem', border: '1px solid rgba(0,0,0,0.35)', borderRadius: 6, textDecoration: 'none' }} href={`/api/share/${shareToken}/pdf`}>
+      <a className="button-link" href={`/api/share/${shareToken}/pdf`}>
         Download PDF
       </a>
     </div>
