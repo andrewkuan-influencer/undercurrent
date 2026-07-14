@@ -34,6 +34,15 @@ const SNAPSHOT_EXCERPT_LIMIT = 2000
 /** A query embedder now exists (PRD 7b), so the document channel is active. */
 const HAS_EMBEDDER = true
 
+/**
+ * Cap on how many working-set sources reach re-verification and the single
+ * synthesis call. Deep recency tiers gather far more (up to 100) for coverage,
+ * but one synthesis call stays reliable only on a bounded, highest-relevance
+ * slice; the rest still live in the ledger and shape coverage. The report cites
+ * from this slice.
+ */
+const MAX_SYNTHESIS_SOURCES = 50
+
 const dbOp = <A>(thunk: () => Promise<A>): Effect.Effect<A, DbError> =>
   Effect.tryPromise({
     try: thunk,
@@ -43,6 +52,15 @@ const dbOp = <A>(thunk: () => Promise<A>): Effect.Effect<A, DbError> =>
 const setStatus = (questionId: string, status: string) =>
   dbOp(() =>
     db.update(questions).set({ status }).where(eq(questions.id, questionId)),
+  )
+
+/** Mark a run failed and persist why, so opaque prod failures stay diagnosable. */
+const setFailed = (questionId: string, detail: string) =>
+  dbOp(() =>
+    db
+      .update(questions)
+      .set({ status: QuestionStatus.Failed, errorDetail: detail.slice(0, 2000) })
+      .where(eq(questions.id, questionId)),
   )
 
 export interface CreateQuestionInput {
@@ -205,14 +223,19 @@ export const runForQuestion = (
     )
 
     // Synthesis reads the assembled working set from the ledger (inherited +
-    // newly gathered), not gather's in-memory return.
+    // newly gathered), not gather's in-memory return. Bound the expensive
+    // downstream steps (re-verify, the single synthesis call) to the most
+    // relevant slice so a deep run stays reliable.
     const workingSet = yield* loadWorkingSet(questionId)
     if (workingSet.length === 0) return yield* new NoEvidenceError({ questionId })
+    const selected = [...workingSet]
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, MAX_SYNTHESIS_SOURCES)
 
-    yield* reverifyWorkingSet(workingSet)
+    yield* reverifyWorkingSet(selected)
 
     yield* setStatus(questionId, QuestionStatus.Synthesising)
-    const forSynthesis: WorkingSetItem[] = workingSet.map((s) => ({
+    const forSynthesis: WorkingSetItem[] = selected.map((s) => ({
       id: s.id,
       channel: s.channel,
       title: s.title,
@@ -221,7 +244,7 @@ export const runForQuestion = (
     }))
     const { insight, citations } = yield* synthesize(question.question, forSynthesis)
 
-    const snapshotById = new Map(workingSet.map((s) => [s.id, s]))
+    const snapshotById = new Map(selected.map((s) => [s.id, s]))
     const shareToken = randomUUID()
     yield* dbOp(() =>
       db.transaction(async (tx) => {
@@ -249,12 +272,16 @@ export const runForQuestion = (
   })
 
   return program.pipe(
-    Effect.catchAll((error) =>
-      Effect.zipRight(
-        Effect.logError(`run ${questionId} failed: ${JSON.stringify(error)}`),
-        setStatus(questionId, QuestionStatus.Failed).pipe(Effect.ignore),
-      ),
-    ),
+    Effect.catchAll((error) => {
+      const detail =
+        (error as { _tag?: string })?._tag != null
+          ? `${(error as { _tag: string })._tag}: ${JSON.stringify(error)}`
+          : JSON.stringify(error)
+      return Effect.zipRight(
+        Effect.logError(`run ${questionId} failed: ${detail}`),
+        setFailed(questionId, detail).pipe(Effect.ignore),
+      )
+    }),
   )
 }
 

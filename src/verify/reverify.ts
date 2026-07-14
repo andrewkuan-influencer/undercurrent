@@ -46,26 +46,33 @@ export interface ReverifyResult {
  * whose last_verified_at is older than seven days gets a liveness check, and its
  * verified_live / last_verified_at are updated. Fresh sources are left alone.
  */
+/** Liveness checks run in parallel; each HEAD can take up to HEAD_TIMEOUT_MS. */
+const REVERIFY_CONCURRENCY = 8
+
 export const reverifyWorkingSet = (
   workingSet: ReadonlyArray<WorkingSetSource>,
   now: Date = new Date(),
 ): Effect.Effect<ReverifyResult, DbError> =>
   Effect.gen(function* () {
-    let checked = 0
-    let live = 0
-    for (const source of workingSet) {
-      if (!isStale(source.lastVerifiedAt, now)) continue
-      checked++
-      const alive = yield* checkLiveness(source)
-      if (alive) live++
-      yield* Effect.tryPromise({
-        try: () =>
-          db
-            .update(sources)
-            .set({ verifiedLive: alive, lastVerifiedAt: new Date() })
-            .where(eq(sources.id, source.id)),
-        catch: (cause) => new DbError({ reason: String(cause) }),
-      })
-    }
-    return { checked, live }
+    const stale = workingSet.filter((s) => isStale(s.lastVerifiedAt, now))
+    // Parallelise: a large deep-tier working set would otherwise serialise many
+    // multi-second HEAD requests into minutes.
+    const results = yield* Effect.all(
+      stale.map((source) =>
+        Effect.gen(function* () {
+          const alive = yield* checkLiveness(source)
+          yield* Effect.tryPromise({
+            try: () =>
+              db
+                .update(sources)
+                .set({ verifiedLive: alive, lastVerifiedAt: new Date() })
+                .where(eq(sources.id, source.id)),
+            catch: (cause) => new DbError({ reason: String(cause) }),
+          })
+          return alive
+        }),
+      ),
+      { concurrency: REVERIFY_CONCURRENCY },
+    )
+    return { checked: results.length, live: results.filter(Boolean).length }
   })

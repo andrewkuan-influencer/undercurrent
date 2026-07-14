@@ -55,6 +55,9 @@ export const questions = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id),
+    // Set when a run ends in 'failed', so opaque production failures are
+    // diagnosable from the ledger without server logs.
+    errorDetail: text('error_detail'),
     parentQuestionId: uuid('parent_question_id').references(
       (): AnyPgColumn => questions.id,
     ),

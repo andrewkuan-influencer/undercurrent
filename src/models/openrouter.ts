@@ -18,9 +18,9 @@ function isTransient(error: ModelError): boolean {
   return error.status === 429 || error.status >= 500
 }
 
-/** Two retries with exponential backoff, only while the failure is transient. */
+/** Three retries with exponential backoff, only while the failure is transient. */
 const RETRY_TRANSIENT = Schedule.exponential(Duration.seconds(1)).pipe(
-  Schedule.compose(Schedule.recurs(2)),
+  Schedule.compose(Schedule.recurs(3)),
   Schedule.whileInput((error: ModelError) => isTransient(error)),
 )
 

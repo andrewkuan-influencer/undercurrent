@@ -22,6 +22,7 @@ interface QuestionData {
   status: string
   recencyWindowDays: number | null
   parentQuestionId: string | null
+  errorDetail: string | null
   stats: QuestionStats
   depth: number
   result: {
@@ -119,10 +120,25 @@ function QuestionPage() {
           recencyWindowDays={data.recencyWindowDays}
         />
       ) : data.status === 'failed' ? (
-        <p className="card">
-          This run did not complete. It may have found no usable evidence. You can
-          try a broader question or a wider recency window.
-        </p>
+        <div className="card">
+          <p style={{ margin: 0 }}>
+            This run did not complete. It may have found no usable evidence. You
+            can try a broader question or a wider recency window.
+          </p>
+          {data.errorDetail ? (
+            <p
+              className="muted"
+              style={{
+                margin: '0.6rem 0 0',
+                fontSize: 11,
+                fontFamily: 'ui-monospace, monospace',
+                wordBreak: 'break-word',
+              }}
+            >
+              {data.errorDetail}
+            </p>
+          ) : null}
+        </div>
       ) : data.result ? (
         <div>
           <ShareBar shareToken={data.result.shareToken} />

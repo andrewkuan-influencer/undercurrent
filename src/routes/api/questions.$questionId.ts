@@ -42,6 +42,7 @@ export const Route = createFileRoute('/api/questions/$questionId')({
             status: questions.status,
             recencyWindowDays: questions.recencyWindowDays,
             parentQuestionId: questions.parentQuestionId,
+            errorDetail: questions.errorDetail,
             createdAt: questions.createdAt,
           })
           .from(questions)

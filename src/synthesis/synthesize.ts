@@ -79,6 +79,11 @@ export const synthesize = (
         { role: 'user', content: userContent },
       ],
       temperature: 0.7,
+      // The full six-component report is a large, slow generation over many
+      // sources: a generous token ceiling avoids truncated (unparseable) JSON,
+      // and a longer timeout avoids cutting the call off mid-write.
+      maxTokens: 8000,
+      timeoutMs: 150_000,
     })
 
     const parsed = yield* Effect.try({
