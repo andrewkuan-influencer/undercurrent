@@ -1,6 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { Effect, Schema } from 'effect'
+import gatherPlanPrompt from '../../prompts/gather-plan.md?raw'
 import { MAIN_MODEL } from '../config/models'
 import { callModel } from '../models/openrouter'
 import { extractJson } from '../models/json'
@@ -34,12 +33,6 @@ const GatherPlan = Schema.Struct({
 })
 export type GatherPlan = Schema.Schema.Type<typeof GatherPlan>
 
-const loadPlanPrompt = Effect.tryPromise({
-  try: () => readFile(join(process.cwd(), 'prompts', 'gather-plan.md'), 'utf8'),
-  catch: (cause) =>
-    new PlanError({ reason: `failed to load plan prompt: ${String(cause)}` }),
-})
-
 /**
  * The planning step (PRD 5.4): one main-model call turns the question, recency
  * window, and project context into facets plus per-channel queries. The recency
@@ -51,7 +44,7 @@ export const planStep = (
   recencyWindowDays: number,
 ): Effect.Effect<GatherPlan, PlanError> =>
   Effect.gen(function* () {
-    const systemPrompt = yield* loadPlanPrompt
+    const systemPrompt = gatherPlanPrompt
 
     const context = {
       question: questionText,

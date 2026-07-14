@@ -1,15 +1,11 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { Effect } from 'effect'
-import { ModelError } from '../models/openrouter'
+import synthesisPrompt from '../../prompts/synthesis.md?raw'
 
 /**
- * Load the synthesis system prompt from prompts/synthesis.md. Prompts live in
- * their own files (CLAUDE.md) so they can be iterated without touching logic.
+ * The synthesis system prompt. Prompts live in their own files (CLAUDE.md) so
+ * they can be iterated without touching logic, and are imported with Vite's
+ * `?raw` so they ship inside the serverless bundle rather than being read from
+ * the filesystem at runtime (which is absent on Vercel).
  */
-export const loadSynthesisPrompt: Effect.Effect<string, ModelError> =
-  Effect.tryPromise({
-    try: () => readFile(join(process.cwd(), 'prompts', 'synthesis.md'), 'utf8'),
-    catch: (cause) =>
-      new ModelError({ reason: `failed to load synthesis prompt: ${String(cause)}` }),
-  })
+export const loadSynthesisPrompt: Effect.Effect<string> =
+  Effect.succeed(synthesisPrompt)

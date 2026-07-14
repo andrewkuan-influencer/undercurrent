@@ -1,6 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { Effect, Schema } from 'effect'
+import scorePrompt from '../../prompts/score-extract.md?raw'
 import { LIGHTWEIGHT_MODEL } from '../config/models'
 import { extractJson } from '../models/json'
 import { callModel } from '../models/openrouter'
@@ -40,11 +39,6 @@ const DROPPED: Scored = {
   excerpt: '',
 }
 
-const loadScorePrompt = Effect.tryPromise({
-  try: () => readFile(join(process.cwd(), 'prompts', 'score-extract.md'), 'utf8'),
-  catch: (cause) => new Error(`failed to load score prompt: ${String(cause)}`),
-}).pipe(Effect.orElseSucceed(() => ''))
-
 function chunk<A>(items: ReadonlyArray<A>, size: number): A[][] {
   const out: A[][] = []
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
@@ -80,7 +74,7 @@ export const scoreAndExtract = (
 ): Effect.Effect<Scored[]> =>
   Effect.gen(function* () {
     if (inputs.length === 0) return []
-    const systemPrompt = yield* loadScorePrompt
+    const systemPrompt = scorePrompt
 
     const batches = chunk([...inputs], SCORE_BATCH_SIZE)
     const results: Scored[] = new Array(inputs.length).fill(DROPPED)
