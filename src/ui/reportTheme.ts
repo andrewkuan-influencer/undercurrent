@@ -1,22 +1,17 @@
 /**
- * Colour tones for the six report sections, so the report reads as a designed
- * document rather than a wall of text (PRD 4.3, 4.4). Each tone is a dark-text /
- * light-background pair used for the section's uppercase eyebrow label. Values
- * mirror the reference design's semantic label palette. Client-safe: no imports.
+ * Accent colours for the six report sections (docs/UI.md, InsightCard): each
+ * section gets a 3px coloured left border and a matching uppercase 11px title.
+ * Insight blue, tensions rust, quotes purple, creator angles amber, references
+ * grey. Client-safe: no imports.
  */
-export interface SectionTone {
-  readonly fg: string
-  readonly bg: string
-}
-
-export const SECTION_TONES: Record<
+export const SECTION_ACCENTS: Record<
   'headline' | 'topic' | 'tensions' | 'consumer' | 'creator' | 'sources',
-  SectionTone
+  string
 > = {
-  headline: { fg: '#0f766e', bg: '#ccfbf1' }, // teal, the hero
-  topic: { fg: '#3c3489', bg: '#eeedfe' }, // indigo
-  tensions: { fg: '#c2410c', bg: '#faece7' }, // clay
-  consumer: { fg: '#065f46', bg: '#ecfdf5' }, // emerald
-  creator: { fg: '#633806', bg: '#fffbeb' }, // amber
-  sources: { fg: '#3f3f46', bg: '#f4f4f5' }, // neutral ink
+  headline: '#3C3489', // blue, the core insight
+  topic: '#2d8c5a', // green
+  tensions: '#c2410c', // rust
+  consumer: '#7c3aed', // purple, verbatim quotes
+  creator: '#d97706', // amber
+  sources: '#888888', // grey, references
 }

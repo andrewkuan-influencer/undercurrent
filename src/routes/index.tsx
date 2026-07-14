@@ -1,139 +1,51 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
-  component: ProjectsPage,
+  component: HomePage,
 })
 
-interface ProjectRow {
-  id: string
-  name: string
-  description: string | null
-  audiences: string[] | null
-  topics: string[] | null
-}
+/**
+ * Workspace empty state (docs/UI.md): project creation and navigation live in
+ * the sidebar, so the canvas just points there and seeds a few question ideas.
+ */
+const DEMO_QUESTIONS = [
+  'How is Gen Z redefining luxury in 2026?',
+  'What is driving the backlash against fast fashion among UK consumers?',
+  'Why are young men suddenly into skincare?',
+]
 
-function ProjectsPage() {
-  const [projects, setProjects] = useState<ProjectRow[] | null>(null)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [audiences, setAudiences] = useState('')
-  const [topics, setTopics] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const load = () =>
-    fetch('/api/projects')
-      .then((r) => r.json())
-      .then(setProjects)
-      .catch(() => setProjects([]))
-
-  useEffect(() => {
-    void load()
-  }, [])
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    setSaving(true)
-    await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, description, audiences, topics }),
-    })
-    setName('')
-    setDescription('')
-    setAudiences('')
-    setTopics('')
-    setSaving(false)
-    void load()
-  }
-
+function HomePage() {
   return (
-    <div>
-      <h1>Projects</h1>
+    <div style={{ textAlign: 'center', paddingTop: '18vh' }}>
+      <div style={{ fontSize: 40, lineHeight: 1 }} aria-hidden>
+        🔍
+      </div>
+      <h1 style={{ marginTop: '1rem' }}>Select a project to start</h1>
+      <p className="muted" style={{ maxWidth: 380, margin: '0 auto' }}>
+        Pick a project in the sidebar, or create one with <strong>+ New</strong>.
+        Every question runs against live web and Reddit evidence.
+      </p>
 
-      <h2>Your projects</h2>
-      {projects === null ? (
-        <p className="muted">Loading…</p>
-      ) : projects.length === 0 ? (
-        <p className="muted">No projects yet. Create one below.</p>
-      ) : (
-        <ul className="clean">
-          {projects.map((p) => (
-            <li key={p.id} className="card">
-              <Link to="/projects/$projectId" params={{ projectId: p.id }}>
-                <strong>{p.name}</strong>
-              </Link>
-              {p.description ? (
-                <p className="muted" style={{ margin: '0.35rem 0 0' }}>
-                  {p.description}
-                </p>
-              ) : null}
-              {(p.topics?.length ?? 0) > 0 || (p.audiences?.length ?? 0) > 0 ? (
-                <div className="tags">
-                  {(p.audiences ?? []).map((a) => (
-                    <span key={`a-${a}`} className="tag">
-                      audience: {a}
-                    </span>
-                  ))}
-                  {(p.topics ?? []).map((t) => (
-                    <span key={`t-${t}`} className="tag">
-                      topic: {t}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+      <div style={{ maxWidth: 420, margin: '2.5rem auto 0', textAlign: 'left' }}>
+        <span className="label">Questions to try</span>
+        <ul className="clean stack">
+          {DEMO_QUESTIONS.map((q) => (
+            <li
+              key={q}
+              className="muted"
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: '0.6rem 0.85rem',
+                fontSize: 13,
+                background: 'var(--surface)',
+              }}
+            >
+              → {q}
             </li>
           ))}
         </ul>
-      )}
-
-      <h2>New project</h2>
-      <form onSubmit={submit} className="stack prose">
-        <div>
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Spring beauty brief"
-          />
-        </div>
-        <div>
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="audiences">Audiences (comma separated)</label>
-          <input
-            id="audiences"
-            type="text"
-            value={audiences}
-            onChange={(e) => setAudiences(e.target.value)}
-            placeholder="Gen Z, millennial parents"
-          />
-        </div>
-        <div>
-          <label htmlFor="topics">Topics (comma separated)</label>
-          <input
-            id="topics"
-            type="text"
-            value={topics}
-            onChange={(e) => setTopics(e.target.value)}
-            placeholder="secondhand fashion, skincare"
-          />
-        </div>
-        <div>
-          <button type="submit" disabled={saving || !name.trim()}>
-            {saving ? 'Creating…' : 'Create project'}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   )
 }

@@ -37,9 +37,25 @@ function SharePage() {
   return (
     <div>
       <h1 className="prose">{data.question}</h1>
-      <p className="muted">
-        Shared read-only report.{' '}
-        <a href={`/api/share/${token}/pdf`}>Download PDF</a>
+      <p
+        className="muted"
+        style={{
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          flexWrap: 'wrap',
+          margin: '0 0 1rem',
+        }}
+      >
+        Shared read-only report.
+        <a
+          className="button-link"
+          style={{ borderRadius: 99, padding: '0.25rem 0.75rem', fontSize: 12 }}
+          href={`/api/share/${token}/pdf`}
+        >
+          Export PDF
+        </a>
       </p>
       <ReportBody insight={data.insight} sources={data.sources} />
     </div>

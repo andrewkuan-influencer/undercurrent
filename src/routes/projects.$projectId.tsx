@@ -1,6 +1,7 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_RECENCY_INDEX, RECENCY_PRESETS } from '../ui/recency'
+import { timeAgo } from '../ui/time'
 
 export const Route = createFileRoute('/projects/$projectId')({
   component: ProjectPage,
@@ -23,6 +24,25 @@ interface ProjectData {
   }>
 }
 
+interface DocumentRow {
+  id: string
+  fileName: string
+  status: string | null
+}
+
+function fileIcon(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase()
+  if (ext === 'csv') return '📊'
+  if (ext === 'json') return '🧾'
+  return '📝'
+}
+
+function statusPill(status: string): { className: string; label: string } {
+  if (status === 'complete') return { className: 'pill pill-green', label: 'complete' }
+  if (status === 'failed') return { className: 'pill pill-coral', label: 'failed' }
+  return { className: 'pill pill-blue', label: status }
+}
+
 function ProjectPage() {
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
@@ -30,11 +50,10 @@ function ProjectPage() {
   const [question, setQuestion] = useState('')
   const [recencyIdx, setRecencyIdx] = useState(DEFAULT_RECENCY_INDEX)
   const [asking, setAsking] = useState(false)
-  const [documents, setDocuments] = useState<
-    Array<{ id: string; fileName: string; status: string | null }>
-  >([])
+  const [documents, setDocuments] = useState<DocumentRow[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const load = () =>
     fetch(`/api/projects/${projectId}`)
@@ -54,12 +73,7 @@ function ProjectPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  const uploadDocument = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const form = e.currentTarget
-    const input = form.elements.namedItem('file') as HTMLInputElement | null
-    const file = input?.files?.[0]
-    if (!file) return
+  const uploadDocument = async (file: File) => {
     setUploading(true)
     setUploadError(null)
     const body = new FormData()
@@ -69,18 +83,17 @@ function ProjectPage() {
       body,
     })
     setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string }
       setUploadError(err.error ?? 'upload failed')
       return
     }
-    form.reset()
     void loadDocuments()
   }
 
-  const ask = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!question.trim()) return
+  const ask = async () => {
+    if (!question.trim() || asking) return
     setAsking(true)
     const res = await fetch('/api/questions', {
       method: 'POST',
@@ -108,119 +121,166 @@ function ProjectPage() {
 
   return (
     <div>
-      <p className="muted">
-        <Link to="/">Projects</Link> / {project.name}
-      </p>
-      <h1>{project.name}</h1>
-      {project.description ? <p className="prose">{project.description}</p> : null}
+      {/* Title row */}
+      <h1 style={{ marginBottom: '0.25rem' }}>{project.name}</h1>
+      {project.description ? (
+        <p className="muted" style={{ margin: '0 0 0.25rem', fontSize: 13 }}>
+          {project.description}
+        </p>
+      ) : null}
+
+      {/* Context pills: audiences purple, topics amber */}
       {(project.audiences?.length ?? 0) > 0 || (project.topics?.length ?? 0) > 0 ? (
         <div className="tags">
           {(project.audiences ?? []).map((a) => (
-            <span key={`a-${a}`} className="tag">
-              audience: {a}
+            <span key={`a-${a}`} className="pill pill-audience">
+              {a}
             </span>
           ))}
           {(project.topics ?? []).map((t) => (
-            <span key={`t-${t}`} className="tag">
-              topic: {t}
+            <span key={`t-${t}`} className="pill pill-topic">
+              {t}
             </span>
           ))}
         </div>
       ) : null}
 
-      <h2>Documents</h2>
-      {documents.length === 0 ? (
-        <p className="muted">
-          No documents yet. Uploaded documents are searched first in every run.
-        </p>
-      ) : (
-        <ul className="clean">
-          {documents.map((d) => (
-            <li key={d.id} className="card">
-              {d.fileName}
-              <span className="pill">{d.status ?? 'unknown'}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={uploadDocument} className="stack prose">
-        <div>
-          <label htmlFor="file">Upload a document (text or markdown)</label>
+      {/* Question input card */}
+      <div className="qcard" style={{ marginTop: '1.6rem' }}>
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              void ask()
+            }
+          }}
+          placeholder="Ask a cultural question about your audience…"
+          rows={2}
+        />
+        <div style={{ padding: '0.35rem 0.1rem 0.15rem' }}>
+          <span className="label" style={{ marginBottom: '0.2rem' }}>
+            Recency window: {preset.label} · {preset.days} days
+          </span>
           <input
-            id="file"
-            name="file"
-            type="file"
-            accept=".txt,.md,.markdown,.csv,.json,text/*"
-          />
-        </div>
-        <div>
-          <button type="submit" disabled={uploading}>
-            {uploading ? 'Uploading and embedding…' : 'Upload'}
-          </button>
-          {uploadError ? (
-            <span className="muted" style={{ marginLeft: '0.6rem' }}>
-              {uploadError}
-            </span>
-          ) : null}
-        </div>
-      </form>
-
-      <h2>Ask a question</h2>
-      <form onSubmit={ask} className="stack prose">
-        <div>
-          <label htmlFor="question">Question</label>
-          <textarea
-            id="question"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="e.g. How is Gen Z thinking about secondhand fashion?"
-          />
-        </div>
-        <div>
-          <label htmlFor="recency">
-            Recency window: <strong>{preset.label}</strong>{' '}
-            <span className="muted">({preset.days} days)</span>
-          </label>
-          <input
-            id="recency"
             type="range"
             min={0}
             max={RECENCY_PRESETS.length - 1}
             step={1}
             value={recencyIdx}
             onChange={(e) => setRecencyIdx(Number(e.target.value))}
-            style={{ width: '100%' }}
           />
           <div
             className="muted"
-            style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}
+            style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}
           >
             {RECENCY_PRESETS.map((p) => (
               <span key={p.label}>{p.label}</span>
             ))}
           </div>
         </div>
-        <div>
-          <button type="submit" disabled={asking || !question.trim()}>
-            {asking ? 'Starting…' : 'Run report'}
+        <div className="qcard-toolbar">
+          <span className="muted" style={{ fontSize: 12 }}>
+            Enter runs. Shift+Enter for a new line.
+          </span>
+          <button type="button" onClick={() => void ask()} disabled={asking || !question.trim()}>
+            {asking ? 'Running…' : 'Run now'}
           </button>
         </div>
-      </form>
+      </div>
 
+      {/* Files */}
+      <h2>Files</h2>
+      {documents.length > 0 ? (
+        <ul className="clean">
+          {documents.map((d) => (
+            <li key={d.id} className="file-row">
+              <span aria-hidden>{fileIcon(d.fileName)}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {d.fileName}
+              </span>
+              {d.status === 'ready' ? (
+                <span className="pill pill-green">✓ ready</span>
+              ) : d.status === 'error' ? (
+                <span className="pill pill-coral">✕ error</span>
+              ) : (
+                <span className="pill pill-blue">
+                  <span className="dot dot-blue pulse" style={{ width: 6, height: 6, marginRight: 5 }} />
+                  {d.status ?? 'processing'}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted" style={{ fontSize: 12, margin: '0 0 0.5rem' }}>
+          Uploaded documents are searched first in every run.
+        </p>
+      )}
+      <label className="dropzone">
+        {uploading ? 'Uploading and embedding…' : '+ Add file · TXT, MD, CSV, JSON'}
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".txt,.md,.markdown,.csv,.json,text/*"
+          style={{ display: 'none' }}
+          disabled={uploading}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void uploadDocument(file)
+          }}
+        />
+      </label>
+      {uploadError ? (
+        <p style={{ color: 'var(--coral)', fontSize: 12, marginTop: '0.4rem' }}>{uploadError}</p>
+      ) : null}
+
+      {/* Questions */}
       <h2>Questions</h2>
       {questions.length === 0 ? (
         <p className="muted">No questions asked yet.</p>
       ) : (
         <ul className="clean">
-          {questions.map((q) => (
-            <li key={q.id} className="card">
-              <Link to="/questions/$questionId" params={{ questionId: q.id }}>
-                {q.question}
-              </Link>
-              <span className="pill">{q.status}</span>
-              {q.parentQuestionId ? <span className="pill">follow-up</span> : null}
-            </li>
-          ))}
+          {questions.map((q) => {
+            const pill = statusPill(q.status)
+            return (
+              <li
+                key={q.id}
+                className="card"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.7rem 1rem' }}
+              >
+                <span
+                  className={
+                    q.status === 'complete'
+                      ? 'dot dot-green'
+                      : q.status === 'failed'
+                        ? 'dot dot-coral'
+                        : 'dot dot-blue pulse'
+                  }
+                />
+                <Link
+                  to="/questions/$questionId"
+                  params={{ questionId: q.id }}
+                  style={{
+                    flex: 1,
+                    color: 'var(--text)',
+                    textDecoration: 'none',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {q.question}
+                </Link>
+                <span className={pill.className}>{pill.label}</span>
+                {q.parentQuestionId ? <span className="pill">follow-up</span> : null}
+                <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>
+                  {timeAgo(q.createdAt)}
+                </span>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

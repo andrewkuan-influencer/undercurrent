@@ -15,14 +15,44 @@ function SignInPage() {
   }
 
   return (
-    <div className="prose">
-      <h1>Sign in</h1>
-      <p className="muted">
-        Undercurrent is limited to influencer.com accounts. Sign in with your
-        work Google account.
+    <div
+      className="card"
+      style={{
+        maxWidth: 360,
+        margin: '10vh auto 0',
+        padding: '2rem',
+        textAlign: 'center',
+        borderRadius: 16,
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 99,
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 0.9rem',
+          fontSize: 18,
+          color: 'var(--muted)',
+        }}
+      >
+        ✦
+      </div>
+      <h1 style={{ marginBottom: '0.2rem' }}>Sign in</h1>
+      <p className="label" style={{ margin: '0 0 1rem' }}>
+        Undercurrent · Restricted access
       </p>
-      <button type="button" onClick={google} disabled={busy}>
-        {busy ? 'Redirecting…' : 'Sign in with Google'}
+      <p className="muted" style={{ fontSize: 13, margin: '0 0 1.25rem' }}>
+        Limited to influencer.com accounts. Sign in with your work Google
+        account.
+      </p>
+      <button type="button" onClick={google} disabled={busy} style={{ width: '100%' }}>
+        {busy ? 'Redirecting…' : 'Sign in with Google →'}
       </button>
     </div>
   )

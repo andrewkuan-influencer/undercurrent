@@ -60,14 +60,23 @@ function QuestionPage() {
 
   return (
     <div>
-      <p className="muted">
-        <Link to="/projects/$projectId" params={{ projectId: data.projectId }}>
-          Back to project
+      <p style={{ margin: '0 0 0.6rem' }}>
+        <Link
+          to="/projects/$projectId"
+          params={{ projectId: data.projectId }}
+          className="muted"
+          style={{ fontSize: 12, textDecoration: 'none' }}
+        >
+          ← Back to project
         </Link>
       </p>
       <h1 className="prose">{data.question}</h1>
-      <p className="muted">
-        {data.parentQuestionId ? 'Follow-up question. ' : ''}
+      <p className="muted" style={{ fontSize: 12 }}>
+        {data.parentQuestionId ? (
+          <span className="pill" style={{ marginLeft: 0, marginRight: 6 }}>
+            follow-up
+          </span>
+        ) : null}
         Recency window: {data.recencyWindowDays ?? '?'} days.
       </p>
 
@@ -106,12 +115,23 @@ function RunStatus({ status }: { status: string }) {
       ? 'Gathering evidence across the web and Reddit…'
       : 'Writing the report from the evidence…'
   return (
-    <div className="card">
-      <strong>
-        <span className="status-dot" />
-        {status === 'gathering' ? 'Gathering' : 'Synthesising'}
-      </strong>
-      <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.55rem',
+          padding: '0.7rem 1.1rem',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg)',
+        }}
+      >
+        <span className="dot dot-green pulse" />
+        <span className="label" style={{ margin: 0, color: 'var(--text)' }}>
+          {status === 'gathering' ? 'Agent researching…' : 'Synthesising…'}
+        </span>
+      </div>
+      <p className="muted" style={{ margin: 0, padding: '0.8rem 1.1rem', fontSize: 13 }}>
         {message} This can take a minute or two. The page updates itself.
       </p>
     </div>
@@ -127,10 +147,19 @@ function ShareBar({ shareToken }: { shareToken: string | null }) {
       : `/share/${shareToken}`
 
   return (
-    <div className="card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: '0.5rem',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        flexWrap: 'wrap',
+        margin: '0 0 0.75rem',
+      }}
+    >
       <button
         type="button"
-        className="secondary"
+        className="secondary btn-pill"
         onClick={() => {
           void navigator.clipboard.writeText(shareUrl).then(() => {
             setCopied(true)
@@ -138,10 +167,14 @@ function ShareBar({ shareToken }: { shareToken: string | null }) {
           })
         }}
       >
-        {copied ? 'Copied' : 'Copy shareable link'}
+        {copied ? '✓ Copied' : 'Copy shareable link'}
       </button>
-      <a className="button-link" href={`/api/share/${shareToken}/pdf`}>
-        Download PDF
+      <a
+        className="button-link"
+        style={{ borderRadius: 99, padding: '0.3rem 0.8rem', fontSize: 12 }}
+        href={`/api/share/${shareToken}/pdf`}
+      >
+        Export PDF
       </a>
     </div>
   )
