@@ -190,20 +190,48 @@ export function ReportBody({
         <ol className="clean stack">
           {sources.map((s, i) => (
             <li key={s.id} id={`source-${i + 1}`} style={{ fontSize: 13 }}>
-              <div>
-                <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {/* One line always: long titles truncate, pills stay visible. */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  className="muted"
+                  style={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginRight: 5 }}
+                >
                   [{i + 1}]
-                </span>{' '}
-                <ChannelMark channel={s.channel} />
+                </span>
+                <span style={{ flexShrink: 0 }}>
+                  <ChannelMark channel={s.channel} />
+                </span>
                 {s.url ? (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '0 1 auto' }}
+                  >
                     {s.title ?? s.url}
                   </a>
                 ) : (
-                  <span>{s.title ?? 'Untitled source'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '0 1 auto' }}>
+                    {s.title ?? 'Untitled source'}
+                  </span>
                 )}
-                {s.voice ? <span className="pill">{s.voice}</span> : null}
-                {s.verifiedLive ? <span className="pill pill-green">verified</span> : null}
+                {s.voice ? (
+                  <span className="pill" style={{ flexShrink: 0 }}>
+                    {s.voice}
+                  </span>
+                ) : null}
+                {s.verifiedLive ? (
+                  <span className="pill pill-green" style={{ flexShrink: 0 }}>
+                    verified
+                  </span>
+                ) : null}
               </div>
               {s.excerpt ? (
                 <p

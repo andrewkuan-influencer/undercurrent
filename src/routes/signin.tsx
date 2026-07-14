@@ -43,7 +43,7 @@ function SignInPage() {
       >
         ✦
       </div>
-      <h1 style={{ marginBottom: '1.1rem' }}>Sign in</h1>
+      <h1 style={{ marginBottom: '1.1rem' }}>Undercurrent</h1>
       <button type="button" onClick={google} disabled={busy} style={{ width: '100%' }}>
         {busy ? 'Redirecting…' : 'Sign in with Google →'}
       </button>

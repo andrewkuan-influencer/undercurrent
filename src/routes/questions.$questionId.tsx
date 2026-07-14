@@ -1,5 +1,12 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { KebabMenu } from '../ui/KebabMenu'
+import {
+  emitProjectViewed,
+  emitQuestionCreated,
+  emitQuestionDeleted,
+} from '../ui/events'
 import { ReportBody } from '../ui/ReportBody'
 import { recencyLabel } from '../ui/recency'
 import type { InsightView, RenderedSourceView } from '../ui/insightView'
@@ -41,8 +48,17 @@ function QuestionPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<QuestionData | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevStatus = useRef<string | null>(null)
+
+  // Tell the sidebar which project this question belongs to (auto-expand +
+  // refresh). Keyed on the projectId value so it fires once, not per poll.
+  const projectId = data?.projectId
+  useEffect(() => {
+    if (projectId) emitProjectViewed(projectId)
+  }, [projectId])
 
   useEffect(() => {
     let active = true
@@ -89,9 +105,28 @@ function QuestionPage() {
   if (notFound) return <p className="muted">Question not found.</p>
   if (data === null) return <p className="muted">Loading…</p>
 
+  const doDelete = async () => {
+    setDeleting(true)
+    const res = await fetch(`/api/questions/${questionId}`, { method: 'DELETE' })
+    setDeleting(false)
+    if (!res.ok) return
+    const body = (await res.json()) as { projectId?: string }
+    setConfirmDelete(false)
+    const target = body.projectId ?? data.projectId
+    emitQuestionDeleted(target)
+    void navigate({ to: '/projects/$projectId', params: { projectId: target } })
+  }
+
   return (
     <div>
-      <p style={{ margin: '0 0 0.6rem' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          margin: '0 0 0.6rem',
+        }}
+      >
         <Link
           to="/projects/$projectId"
           params={{ projectId: data.projectId }}
@@ -100,7 +135,27 @@ function QuestionPage() {
         >
           ← Back to project
         </Link>
-      </p>
+        <KebabMenu
+          label="Question actions"
+          items={[
+            {
+              label: 'Delete',
+              tone: 'danger',
+              onSelect: () => setConfirmDelete(true),
+            },
+          ]}
+        />
+      </div>
+      {confirmDelete ? (
+        <ConfirmDialog
+          title="Delete this question?"
+          body="Its report and follow-ups will also be deleted."
+          confirmLabel="Delete"
+          busy={deleting}
+          onConfirm={() => void doDelete()}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      ) : null}
       <h1 className="prose">{data.question}</h1>
       <p className="muted" style={{ fontSize: 12 }}>
         {data.parentQuestionId ? (
@@ -154,9 +209,10 @@ function QuestionPage() {
           ) : (
             <DiveBox
               questionId={questionId}
-              onDive={(id) =>
-                navigate({ to: '/questions/$questionId', params: { questionId: id } })
-              }
+              onDive={(id) => {
+                emitQuestionCreated(data.projectId)
+                void navigate({ to: '/questions/$questionId', params: { questionId: id } })
+              }}
             />
           )}
         </div>
@@ -167,11 +223,13 @@ function QuestionPage() {
   )
 }
 
-/** Evidence summary strip: sources by channel plus queries issued (PRD 5.4). */
+/**
+ * Evidence summary strip: sources by channel plus queries issued (PRD 5.4).
+ * All four counters render from the start of a run (zeros counting up) so the
+ * strip never pops in mid-research.
+ */
 function StatStrip({ stats }: { stats: QuestionStats }) {
-  if (!stats || stats.web + stats.reddit + stats.doc + stats.queries === 0) {
-    return null
-  }
+  if (!stats) return null
   const item = (n: number, label: string) => (
     <span>
       <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{n}</strong>{' '}

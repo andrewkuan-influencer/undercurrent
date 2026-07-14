@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../../db/client'
 import { projects, questions } from '../../db/schema'
-import { requireUser } from '../../auth/guard'
+import { ownsProject, requireUser } from '../../auth/guard'
+import { deleteProjectCascade } from '../../server/deleteCascade'
 import { json } from '../../server/http'
 
 export const Route = createFileRoute('/api/projects/$projectId')({
@@ -32,6 +33,7 @@ export const Route = createFileRoute('/api/projects/$projectId')({
             question: questions.question,
             status: questions.status,
             parentQuestionId: questions.parentQuestionId,
+            recencyWindowDays: questions.recencyWindowDays,
             createdAt: questions.createdAt,
           })
           .from(questions)
@@ -39,6 +41,22 @@ export const Route = createFileRoute('/api/projects/$projectId')({
           .orderBy(desc(questions.createdAt))
 
         return json({ project, questions: projectQuestions })
+      },
+      // Deletes the project and everything under it (questions, reports,
+      // uploaded documents). Irreversible; the UI double-confirms.
+      DELETE: async ({ params, request }) => {
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        if (!(await ownsProject(user.id, params.projectId))) {
+          return json({ error: 'project not found' }, 404)
+        }
+        try {
+          await deleteProjectCascade(params.projectId)
+        } catch (error) {
+          console.error(`delete project ${params.projectId} failed`, error)
+          return json({ error: 'delete failed' }, 500)
+        }
+        return json({ deleted: true })
       },
     },
   },

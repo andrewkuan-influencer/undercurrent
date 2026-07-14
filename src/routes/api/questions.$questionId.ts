@@ -4,7 +4,8 @@ import { Effect } from 'effect'
 import { db } from '../../db/client'
 import { questionSources, questions, retrievalMemory, sources } from '../../db/schema'
 import { QuestionStatus, loadRenderedResult } from '../../report/run'
-import { ownsProject, requireUser } from '../../auth/guard'
+import { ownsProject, projectIdOfQuestion, requireUser } from '../../auth/guard'
+import { deleteQuestionSubtree } from '../../server/deleteCascade'
 import { json } from '../../server/http'
 
 /** Follow-up chains stop 3 levels below the root question. */
@@ -84,6 +85,25 @@ export const Route = createFileRoute('/api/questions/$questionId')({
             : null
 
         return json({ ...question, stats, depth, result })
+      },
+      // Deletes the question and its whole follow-up subtree. The response
+      // carries projectId so the client can navigate and refresh the sidebar
+      // after the row is gone.
+      DELETE: async ({ params, request }) => {
+        const user = await requireUser(request)
+        if (!user) return json({ error: 'unauthorized' }, 401)
+        const projectId = await projectIdOfQuestion(params.questionId)
+        if (!projectId) return json({ error: 'question not found' }, 404)
+        if (!(await ownsProject(user.id, projectId))) {
+          return json({ error: 'question not found' }, 404)
+        }
+        try {
+          await deleteQuestionSubtree(params.questionId)
+        } catch (error) {
+          console.error(`delete question ${params.questionId} failed`, error)
+          return json({ error: 'delete failed' }, 500)
+        }
+        return json({ deleted: true, projectId })
       },
     },
   },

@@ -1,6 +1,14 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_RECENCY_INDEX, RECENCY_PRESETS } from '../ui/recency'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { KebabMenu } from '../ui/KebabMenu'
+import {
+  emitProjectDeleted,
+  emitProjectViewed,
+  emitQuestionCreated,
+  emitQuestionDeleted,
+} from '../ui/events'
+import { DEFAULT_RECENCY_INDEX, RECENCY_PRESETS, recencyLabel } from '../ui/recency'
 import { timeAgo } from '../ui/time'
 
 export const Route = createFileRoute('/projects/$projectId')({
@@ -20,6 +28,7 @@ interface ProjectData {
     question: string
     status: string
     parentQuestionId: string | null
+    recencyWindowDays: number | null
     createdAt: string
   }>
 }
@@ -53,6 +62,8 @@ function ProjectPage() {
   const [documents, setDocuments] = useState<DocumentRow[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [confirmProject, setConfirmProject] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const load = () =>
@@ -70,6 +81,7 @@ function ProjectPage() {
   useEffect(() => {
     void load()
     void loadDocuments()
+    emitProjectViewed(projectId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
@@ -107,11 +119,29 @@ function ProjectPage() {
     const body = (await res.json()) as { questionId?: string }
     setAsking(false)
     if (body.questionId) {
+      emitQuestionCreated(projectId)
       void navigate({
         to: '/questions/$questionId',
         params: { questionId: body.questionId },
       })
     }
+  }
+
+  const deleteProject = async () => {
+    setDeleting(true)
+    const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+    setDeleting(false)
+    if (!res.ok) return
+    setConfirmProject(false)
+    emitProjectDeleted(projectId)
+    void navigate({ to: '/' })
+  }
+
+  const deleteQuestion = async (questionId: string) => {
+    const res = await fetch(`/api/questions/${questionId}`, { method: 'DELETE' })
+    if (!res.ok) return
+    emitQuestionDeleted(projectId)
+    void load()
   }
 
   if (data === null) return <p className="muted">Loading…</p>
@@ -121,12 +151,35 @@ function ProjectPage() {
 
   return (
     <div>
-      {/* Title row */}
-      <h1 style={{ marginBottom: '0.25rem' }}>{project.name}</h1>
+      {/* Title row with project actions */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+        <h1 style={{ marginBottom: '0.25rem', flex: 1 }}>{project.name}</h1>
+        <KebabMenu
+          label="Project actions"
+          items={[
+            {
+              label: 'Delete project',
+              tone: 'danger',
+              onSelect: () => setConfirmProject(true),
+            },
+          ]}
+        />
+      </div>
       {project.description ? (
         <p className="muted" style={{ margin: '0 0 0.25rem', fontSize: 13 }}>
           {project.description}
         </p>
+      ) : null}
+
+      {confirmProject ? (
+        <ConfirmDialog
+          title={`Delete ${project.name}?`}
+          body="This deletes all its questions, reports, and uploaded documents. This cannot be undone. The project is not recoverable."
+          confirmLabel="Delete project"
+          busy={deleting}
+          onConfirm={() => void deleteProject()}
+          onCancel={() => setConfirmProject(false)}
+        />
       ) : null}
 
       {/* Context pills: audiences purple, topics amber */}
@@ -159,9 +212,16 @@ function ProjectPage() {
           placeholder="Ask a cultural question about your audience…"
           rows={2}
         />
-        <div style={{ padding: '0.35rem 0.1rem 0.15rem' }}>
+        {/* Recency control, visually separated from the prompt above */}
+        <div
+          style={{
+            borderTop: '1px solid #f0f0f0',
+            padding: '0.7rem 0.1rem 0.15rem',
+            marginTop: '0.5rem',
+          }}
+        >
           <span className="label" style={{ marginBottom: '0.2rem' }}>
-            Recency window: {preset.label} · {preset.days} days
+            Recency window: {preset.label}
           </span>
           <input
             type="range"
@@ -171,9 +231,31 @@ function ProjectPage() {
             value={recencyIdx}
             onChange={(e) => setRecencyIdx(Number(e.target.value))}
           />
+          {/* One tick per preset, aligned with the track ends */}
+          <div
+            aria-hidden
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '0 7px',
+              marginTop: -2,
+            }}
+          >
+            {RECENCY_PRESETS.map((p) => (
+              <span
+                key={p.label}
+                style={{ width: 1, height: 6, background: 'var(--border)' }}
+              />
+            ))}
+          </div>
           <div
             className="muted"
-            style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 10,
+              marginTop: 2,
+            }}
           >
             {RECENCY_PRESETS.map((p) => (
               <span key={p.label}>{p.label}</span>
@@ -241,7 +323,7 @@ function ProjectPage() {
       {questions.length === 0 ? (
         <p className="muted">No questions asked yet.</p>
       ) : (
-        <QuestionTree questions={questions} />
+        <QuestionTree questions={questions} onDelete={deleteQuestion} />
       )}
     </div>
   )
@@ -252,8 +334,18 @@ type QuestionRow = ProjectData['questions'][number]
 /**
  * Render root questions newest-first with their follow-up chains indented
  * beneath them (a left rail per level, capped at 3 levels of follow-up).
+ * Each row carries a three-dots menu with a confirmed delete.
  */
-function QuestionTree({ questions }: { questions: QuestionRow[] }) {
+function QuestionTree({
+  questions,
+  onDelete,
+}: {
+  questions: QuestionRow[]
+  onDelete: (questionId: string) => Promise<void>
+}) {
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   const byParent = new Map<string, QuestionRow[]>()
   const ids = new Set(questions.map((q) => q.id))
   const roots: QuestionRow[] = []
@@ -269,6 +361,13 @@ function QuestionTree({ questions }: { questions: QuestionRow[] }) {
   // Children read top-down in creation order; roots stay newest-first.
   for (const list of byParent.values()) {
     list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
+
+  const confirmDelete = async (questionId: string) => {
+    setDeleting(true)
+    await onDelete(questionId)
+    setDeleting(false)
+    setConfirmId(null)
   }
 
   const renderRow = (q: QuestionRow, depth: number): React.ReactNode => {
@@ -314,9 +413,24 @@ function QuestionTree({ questions }: { questions: QuestionRow[] }) {
             {q.question}
           </Link>
           <span className={pill.className}>{pill.label}</span>
+          {q.recencyWindowDays ? (
+            <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>
+              {recencyLabel(q.recencyWindowDays)}
+            </span>
+          ) : null}
           <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>
             {timeAgo(q.createdAt)}
           </span>
+          <KebabMenu
+            label="Question actions"
+            items={[
+              {
+                label: 'Delete',
+                tone: 'danger',
+                onSelect: () => setConfirmId(q.id),
+              },
+            ]}
+          />
         </div>
         {children.length > 0 ? (
           <ul className="clean">{children.map((c) => renderRow(c, depth + 1))}</ul>
@@ -325,5 +439,19 @@ function QuestionTree({ questions }: { questions: QuestionRow[] }) {
     )
   }
 
-  return <ul className="clean">{roots.map((q) => renderRow(q, 0))}</ul>
+  return (
+    <>
+      <ul className="clean">{roots.map((q) => renderRow(q, 0))}</ul>
+      {confirmId ? (
+        <ConfirmDialog
+          title="Delete this question?"
+          body="Its report and follow-ups will also be deleted."
+          confirmLabel="Delete"
+          busy={deleting}
+          onConfirm={() => void confirmDelete(confirmId)}
+          onCancel={() => setConfirmId(null)}
+        />
+      ) : null}
+    </>
+  )
 }

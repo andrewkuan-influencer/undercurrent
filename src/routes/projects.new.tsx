@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { emitProjectCreated } from '../ui/events'
 
 export const Route = createFileRoute('/projects/new')({
   component: NewProjectPage,
@@ -35,6 +36,7 @@ function NewProjectPage() {
       setError(body?.error ?? 'Could not create the project. Try again.')
       return
     }
+    emitProjectCreated()
     void navigate({ to: '/projects/$projectId', params: { projectId: body.id } })
   }
 

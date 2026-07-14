@@ -266,17 +266,63 @@ const GLOBAL_CSS = `
     display: none; position: absolute; bottom: 100%; left: 50%;
     transform: translateX(-50%); z-index: 50;
     background: var(--text); color: #fff; border-radius: 8px;
-    padding: 0.45rem 0.65rem; width: max-content; max-width: 260px;
+    padding: 0.45rem 0.65rem; width: max-content; max-width: 300px;
     font-size: 11px; font-weight: 400; line-height: 1.45; text-align: left;
     box-shadow: 0 4px 14px rgba(0,0,0,0.25);
   }
   .cite:hover .cite-tip { display: block; }
   .cite-tip a, .cite-tip .cite-title {
-    display: block; color: #fff; max-width: 240px;
+    display: block; color: #fff; max-width: 280px; font-size: 13px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .cite-tip a { text-decoration: underline; }
   .cite-tip .cite-domain { display: block; color: #b8b8b8; margin-top: 1px; }
+
+  /* Three-dots menu */
+  .kebab {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 16px; font-weight: 600; line-height: 1;
+    padding: 2px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .kebab:hover:not(:disabled) { opacity: 1; background: var(--bg); color: var(--text); }
+  .menu-pop {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
+    min-width: 130px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.10);
+  }
+  .menu-item {
+    display: block; width: 100%; text-align: left; font-size: 13px;
+    background: transparent; color: var(--text); border: none;
+    padding: 0.45rem 0.7rem; border-radius: 7px; cursor: pointer;
+  }
+  .menu-item:hover:not(:disabled) { opacity: 1; background: var(--bg); }
+  .menu-danger { color: var(--coral); }
+  .menu-danger:hover:not(:disabled) { background: var(--coral-light); }
+
+  /* Confirmation dialog */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(20,20,25,0.35);
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+  }
+  .dialog {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 1.25rem 1.4rem; max-width: 380px; width: 100%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  }
+  button.btn-danger { background: var(--coral); border-color: var(--coral); }
+
+  /* Sidebar resize handle */
+  .sidebar-resizer {
+    position: absolute; top: 0; right: -3px; width: 6px; height: 100%;
+    cursor: col-resize; z-index: 30; background: transparent;
+  }
+  .sidebar-resizer:hover, .sidebar-resizer.dragging { background: var(--blue-light); }
+
+  /* New sidebar rows fade in as runs and creations land */
+  @keyframes row-fade-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+  .row-new { animation: row-fade-in 0.4s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .row-new { animation: none; } }
 `
 
 function RootComponent() {
